@@ -91,6 +91,8 @@ the Telegram bot [@remtex_shorts_ai_bot](https://t.me/remtex_shorts_ai_bot).
 | `GEMINI_API_KEY_2`   | optional | Second Gemini key (used in the rotation pool).                      |
 | `GEMINI_API_KEY_3`   | optional | Third Gemini key (used in the rotation pool).                       |
 | `GEMINI_MODELS`      | optional | Comma-separated model list; skips asking Gemini for available models. |
+| `SUBS_PROXY_URL`     | optional | Content Repurposer: backup subtitle server, called as `GET {SUBS_PROXY_URL}?v={video_id}` when YouTube refuses the direct request. |
+| `SUBS_PROXY_TOKEN`   | optional | Sent to the backup subtitle server as the `X-Token` header.        |
 
 > **Gemini 429 (quota exceeded)?** Free limits are counted **per Google Cloud project and per model** (daily limits reset at midnight Pacific). Extra keys only help if they come from **different projects**. Check your live limits at https://aistudio.google.com/rate-limit or enable billing for higher limits.
 
@@ -148,7 +150,11 @@ Missing `GEMINI_API_KEY` → `{"success": false, "error": "...", "setup": {"titl
    title, channel, description, tags and **chapters** (timecodes parsed from the description)
    via the YouTube Data API (`YOUTUBE_API_KEY`, oEmbed fallback for the title), plus
    **subtitles** (InnerTube player → watch page caption tracks). YouTube often blocks
-   subtitles for datacenter IPs (`LOGIN_REQUIRED`). Then **Gemini watches the public video
+   subtitles for datacenter IPs (`LOGIN_REQUIRED`). Then, if `SUBS_PROXY_URL` is set, the
+   backup subtitle server is asked: `GET {SUBS_PROXY_URL}?v={video_id}` with header
+   `X-Token: {SUBS_PROXY_TOKEN}` (timeout 25 s); a non-empty JSON `text` is used as the full
+   transcript (`sources.subtitles` = `manual`/`auto`, `sources.subtitles_via` = `"proxy"`).
+   If there is still no transcript, **Gemini watches the public video
    itself**: the YouTube URL is sent as `fileData` (low media resolution, 0.2 fps, first
    20 minutes; Google fetches the video on its side, so the IP block does not matter;
    free tier: up to 8 hours of YouTube video per day) and `sources.video_ai` is `"watched"`.
@@ -171,7 +177,7 @@ Missing `GEMINI_API_KEY` → `{"success": false, "error": "...", "setup": {"titl
 ```
 
 Response: `{"success": true, "lang": "en", "video": {id,url,title,channel,thumbnail}|null,
-"sources": {api, oembed, description, chapters, subtitles: "manual|auto|blocked|none", notes, video_ai?: "watched|failed"},
+"sources": {api, oembed, description, chapters, subtitles: "manual|auto|blocked|none", subtitles_via?: "proxy", notes, video_ai?: "watched|failed"},
 "warnings": [...], "telegram_post": "...", "seo_article": {h1, meta_description, intro, sections:[{h2,body}],
 conclusion_h2, conclusion, markdown, html}, "social_posts": [5 × {angle, text}], "stats": {...}}`.
 `GET /api/repurpose?probe=<youtube url>` is a diagnostic (metadata + subtitle availability, no Gemini call).
