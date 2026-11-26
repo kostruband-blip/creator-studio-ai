@@ -12,7 +12,7 @@ right on the page.
 - **Backend:** a Vercel Serverless Function `api/analyze.py` written **only with the Python
   standard library** (`urllib`, `json`, `re`, `os`, …). No heavy dependencies.
 - **AI:** Google Gemini with automatic **key rotation** and a **model carousel**
-  (`gemini-flash-latest` → `gemini-3.8-flash` → `gemini-3.7-flash` → `gemini-pro-latest`)
+  (`gemini-flash-latest` → `gemini-3.8-flash` → `gemini-3.7-flash` → `gemini-pro-latest`, then free-tier fallbacks `gemini-3.6-flash` → `gemini-2.5-flash` → `gemini-flash-lite-latest` → `gemini-3.5-flash-lite` → `gemini-2.5-flash-lite`; unknown models are skipped automatically)
   to dodge `429` / `503` errors.
 
 ---
@@ -63,6 +63,9 @@ blurred, locked cards with a single call-to-action button that opens the full re
 | `GEMINI_API_KEY`     | ✅ yes   | Primary Gemini API key (Google AI Studio).                         |
 | `GEMINI_API_KEY_2`   | optional | Second Gemini key (used in the rotation pool).                      |
 | `GEMINI_API_KEY_3`   | optional | Third Gemini key (used in the rotation pool).                       |
+| `GEMINI_MODELS`      | optional | Comma-separated model list to override the default carousel.        |
+
+> **Gemini 429 (quota exceeded)?** Free limits are counted **per Google Cloud project and per model** (daily limits reset at midnight Pacific). Extra keys only help if they come from **different projects**. Check your live limits at https://aistudio.google.com/rate-limit or enable billing for higher limits.
 
 > **Key formats (2026):**
 > - `YOUTUBE_API_KEY` — Google Cloud → APIs & Services → Credentials → *Create credentials → API key*. Starts with `AIza…`.

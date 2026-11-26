@@ -388,6 +388,7 @@
       unlockBtn: "Unlock All 5 Competitors & 10 Video Ideas in Telegram →",
       footerNote: "Free analysis · Full report in our Telegram bot",
       errTitle: "Setup needed",
+      errGeneric: "Something went wrong",
       eco1: "KoShorts AI Studio",
       eco1desc: "Cut Shorts from any YouTube link",
       eco2: "CreatorDirectory",
@@ -412,6 +413,7 @@
       unlockBtn: "Открыть всех 5 конкурентов и 10 идей видео в Telegram →",
       footerNote: "Бесплатный анализ · Полный отчёт в нашем Telegram-боте",
       errTitle: "Требуется настройка",
+      errGeneric: "Что-то пошло не так",
       eco1: "KoShorts AI Studio",
       eco1desc: "Нарезка Shorts из любой YouTube-ссылки",
       eco2: "CreatorDirectory",
@@ -436,6 +438,7 @@
       unlockBtn: "Відкрити всіх 5 конкурентів і 10 ідей відео в Telegram →",
       footerNote: "Безкоштовний аналіз · Повний звіт у нашому Telegram-боті",
       errTitle: "Потрібне налаштування",
+      errGeneric: "Щось пішло не так",
       eco1: "KoShorts AI Studio",
       eco1desc: "Нарізка Shorts з будь-якого посилання YouTube",
       eco2: "CreatorDirectory",
@@ -558,11 +561,12 @@
       el("errorTitle").textContent = data.setup.title || t("errTitle");
       var html = "";
       for (var i = 0; i < data.setup.steps.length; i++) {
-        html += "<li>" + escapeHtml(data.setup.steps[i]) + "</li>";
+        html += "<li>" + escapeHtml(data.setup.steps[i]).replace(/(https:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>') + "</li>";
       }
       ol.innerHTML = html;
       ol.classList.remove("hidden");
     } else {
+      el("errorTitle").textContent = t("errGeneric");
       ol.classList.add("hidden");
     }
   }
