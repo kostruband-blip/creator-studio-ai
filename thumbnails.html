@@ -86,7 +86,7 @@
   }
   .lang-switch button.active { background: var(--grad-btn); color: #fff; }
 
-  /* tool switcher */
+  /* tool switcher (shared by all 3 tools) */
   .tools { display: flex; gap: 10px; max-width: 1100px; margin: 0 auto; padding: 0 16px 8px; flex-wrap: wrap; align-items: stretch; }
   .tool {
     min-width: 0; display: flex; align-items: center; gap: 12px; border-radius: 14px;
@@ -98,24 +98,25 @@
   .tool em { font-style: normal; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
   /* the tool you are on: quiet "you are here" chip */
   .tool[aria-current="page"] {
-    flex: 1 1 200px; padding: 10px 14px; background: var(--card); border: 1px solid var(--border); color: var(--muted);
+    flex: 1 1 180px; padding: 10px 14px; background: var(--card); border: 1px solid var(--good); color: var(--muted);
+    box-shadow: inset 0 -3px 0 var(--good);
   }
   .tool[aria-current="page"] .ti { font-size: 20px; opacity: .85; }
   .tool[aria-current="page"] b { color: var(--text); font-size: 15px; line-height: 1.2; }
   .tool[aria-current="page"] small { font-size: 13px; line-height: 1.3; }
   .tool[aria-current="page"] em { font-size: 11px; color: var(--good); margin-bottom: 2px; }
-  /* the other tool: big, bright call to action */
+  /* the other tools: big, bright calls to action */
   .tool:not([aria-current="page"]) {
-    flex: 2 1 300px; padding: 14px 18px; background: var(--grad-btn); color: #fff; border: 1px solid rgba(255, 255, 255, 0.25);
+    flex: 1.6 1 270px; padding: 14px 16px; background: var(--grad-btn); color: #fff; border: 1px solid rgba(255, 255, 255, 0.25);
     box-shadow: 0 10px 28px rgba(106, 70, 245, 0.45); animation: toolGlow 2.8s ease-in-out infinite;
   }
-  .tool:not([aria-current="page"]) .ti { font-size: 30px; }
-  .tool:not([aria-current="page"]) b { color: #fff; font-size: 19px; line-height: 1.2; }
-  .tool:not([aria-current="page"]) small { color: #fff; font-size: 15px; line-height: 1.3; font-weight: 600; }
+  .tool:not([aria-current="page"]) .ti { font-size: 28px; }
+  .tool:not([aria-current="page"]) b { color: #fff; font-size: 18px; line-height: 1.2; }
+  .tool:not([aria-current="page"]) small { color: #fff; font-size: 14.5px; line-height: 1.3; font-weight: 600; }
   .tool:not([aria-current="page"]) em { font-size: 12px; color: #fff; margin-bottom: 3px; }
   .tool:not([aria-current="page"])::after {
-    content: ""; flex: 0 0 auto; margin-left: auto; width: 40px; height: 40px; border-radius: 50%;
-    background: rgba(255, 255, 255, 0.18) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14M13 6l6 6-6 6'/%3E%3C/svg%3E") center / 22px no-repeat;
+    content: ""; flex: 0 0 auto; margin-left: auto; width: 38px; height: 38px; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.18) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14M13 6l6 6-6 6'/%3E%3C/svg%3E") center / 21px no-repeat;
     transition: transform .2s;
   }
   .tool:not([aria-current="page"]):hover, .tool:not([aria-current="page"]):focus-visible { transform: translateY(-2px); filter: brightness(1.08); }
@@ -313,8 +314,9 @@
   </nav>
 </header>
 <nav class="tools" aria-label="Tools">
-  <a class="tool" href="/"><span class="ti" aria-hidden="true">📡</span><span class="tx"><em id="toolKick">Also try</em><b>NicheRadar AI</b><small id="toolNicheDesc">Competitors &amp; viral video ideas</small></span></a>
-  <a class="tool" href="/thumbnails" aria-current="page"><span class="ti" aria-hidden="true">🖼️</span><span class="tx"><em id="toolHere">You are here</em><b>Thumbnail &amp; Title Lab</b><small id="toolThumbDesc">16:9 thumbnails &amp; A/B titles</small></span></a>
+  <a class="tool" href="/"><span class="ti" aria-hidden="true">📡</span><span class="tx"><em data-i18n="toolKick">Also try</em><b>NicheRadar AI</b><small data-i18n="toolNicheDesc">Competitors &amp; viral video ideas</small></span></a>
+  <a class="tool" href="/thumbnails" aria-current="page"><span class="ti" aria-hidden="true">🖼️</span><span class="tx"><em data-i18n="toolHere">You are here</em><b>Thumbnail &amp; Title Lab</b><small data-i18n="toolThumbDesc">16:9 thumbnails &amp; A/B titles</small></span></a>
+  <a class="tool" href="/repurpose"><span class="ti" aria-hidden="true">♻️</span><span class="tx"><em data-i18n="toolKick">Also try</em><b>Content Repurposer</b><small data-i18n="toolRepDesc">Telegram post, article &amp; 5 posts from a video</small></span></a>
 </nav>
 
 <main>
@@ -430,6 +432,7 @@
       toolHere: "You are here",
       toolNicheDesc: "Competitors & viral video ideas",
       toolThumbDesc: "16:9 thumbnails & A/B titles",
+      toolRepDesc: "Telegram post, article & 5 posts from a video",
       topicLabel: "Video topic or draft title",
       topicPlaceholder: "e.g. I fixed a dead washing machine for $5",
       examplesLabel: "Try in 1 click:",
@@ -480,6 +483,7 @@
       toolHere: "Вы здесь",
       toolNicheDesc: "Конкуренты и вирусные идеи",
       toolThumbDesc: "Обложки 16:9 и A/B-заголовки",
+      toolRepDesc: "Пост в Telegram, статья и 5 постов из видео",
       topicLabel: "Тема видео или черновик названия",
       topicPlaceholder: "Например: починил мёртвую стиральную машину за 500 рублей",
       examplesLabel: "Попробуйте в 1 клик:",
@@ -530,6 +534,7 @@
       toolHere: "Ви тут",
       toolNicheDesc: "Конкуренти та вірусні ідеї",
       toolThumbDesc: "Обкладинки 16:9 та A/B-заголовки",
+      toolRepDesc: "Пост у Telegram, стаття та 5 постів із відео",
       topicLabel: "Тема відео або чернетка назви",
       topicPlaceholder: "Наприклад: полагодив мертву пральну машину за 200 гривень",
       examplesLabel: "Спробуйте в 1 клік:",
@@ -601,10 +606,12 @@
 
   // ---------- language ----------
   function applyLang() {
-    var ids = ["tagline", "subtagline", "toolNicheDesc", "toolThumbDesc", "topicLabel", "examplesLabel",
+    var ids = ["tagline", "subtagline", "topicLabel", "examplesLabel",
       "nicheLabel", "genLangLabel", "photoLabel", "photoHint", "thumbsTitle", "thumbsSub", "titlesTitle",
-      "titlesSub", "footerNote", "tgOpen", "eco1desc", "eco2desc", "toolKick", "toolHere"];
+      "titlesSub", "footerNote", "tgOpen", "eco1desc", "eco2desc"];
     for (var i = 0; i < ids.length; i++) el(ids[i]).textContent = t(ids[i]);
+    var toolTx = document.querySelectorAll(".tools [data-i18n]");
+    for (var ti = 0; ti < toolTx.length; ti++) toolTx[ti].textContent = t(toolTx[ti].getAttribute("data-i18n"));
     el("errorTitle").textContent = t("errTitle");
     el("topicInput").placeholder = t("topicPlaceholder");
     el("nicheInput").placeholder = t("nichePlaceholder");
@@ -1138,6 +1145,15 @@
   }
 
   applyLang();
+
+  // deep link from NicheRadar / Content Repurposer: /thumbnails?topic=...
+  try {
+    var qTopic = new URLSearchParams(location.search).get("topic");
+    if (qTopic && qTopic.trim()) {
+      el("topicInput").value = qTopic.trim().slice(0, 200);
+      el("topicInput").focus();
+    }
+  } catch (e) {}
 })();
 </script>
 </body>
