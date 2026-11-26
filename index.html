@@ -648,7 +648,20 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url: url })
     })
-      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        // Vercel returns plain text (not JSON) when the function crashes or times out.
+        return r.text().then(function (txt) {
+          try { return JSON.parse(txt); }
+          catch (_) {
+            var code = (txt.match(/FUNCTION_[A-Z_]+/) || [""])[0];
+            var msg = code === "FUNCTION_INVOCATION_TIMEOUT"
+              ? "The analysis took too long (server timeout). Please try again."
+              : "Server error (HTTP " + r.status + (code ? ", " + code : "") +
+                "). Check the function logs in Vercel and redeploy.";
+            return { success: false, error: msg };
+          }
+        });
+      })
       .then(function (data) {
         stopSteps();
         if (data && data.success) {
