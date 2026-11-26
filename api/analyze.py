@@ -122,6 +122,12 @@ def extract_username(url):
 
 def resolve_channel_id(url):
     """Return a channelId from any supported YouTube URL."""
+    host = _foreign_host(url)
+    if host:
+        raise ValueError(
+            "This is not a YouTube link (%s). Paste a YouTube channel link like "
+            "youtube.com/@MrBeast or any YouTube video link." % host
+        )
     # 1) Direct video link -> channelId
     vid = extract_video_id(url)
     if vid:
@@ -140,10 +146,23 @@ def resolve_channel_id(url):
 
     # 3) Handle (@handle) or custom URL (/c/name)
     handle = extract_handle(url) or extract_custom(url)
+    if not handle and re.fullmatch(r"[A-Za-z0-9._-]{3,30}", (url or "").strip()):
+        handle = "@" + url.strip()  # bare handle typed without "@"
     if handle:
         cid = resolve_via_handle(handle)
         if cid:
             return cid
+        shown = "@" + handle.lstrip("@")
+        hint = ""
+        if re.search(r"\.(app|com|net|org|io|dev|site|ru|ua)$", shown, re.I):
+            hint = (" It looks like a website address was typed after "
+                    "'youtube.com/@'. Website addresses (for example "
+                    "/api/analyze?models=1) go into the browser address bar, "
+                    "not into this field.")
+        raise ValueError(
+            "YouTube channel %s was not found. Check the handle spelling "
+            "(example: youtube.com/@MrBeast).%s" % (shown, hint)
+        )
 
     # 4) Legacy /user/NAME
     username = extract_username(url)
@@ -164,18 +183,44 @@ def resolve_channel_id(url):
 
 
 def resolve_via_handle(handle):
+    """channelId for a @handle, or None if YouTube has no such channel.
+
+    YouTube API errors (bad key, quota, network) are NOT hidden as "not found".
+    """
     if not handle:
         return None
-    attempts = [handle, handle.lstrip("@"), "@" + handle.lstrip("@")]
-    for h in attempts:
+    bare = handle.lstrip("@")
+    errors = []
+    for h in dict.fromkeys(["@" + bare, bare]):
         try:
             data = yt_get("channels", {"part": "snippet", "forHandle": h})
-            items = data.get("items") or []
-            if items:
-                return items[0]["id"]
-        except Exception:
+        except RuntimeError as e:
+            errors.append(e)
             continue
+        items = data.get("items") or []
+        if items:
+            return items[0]["id"]
+        return None  # API answered: channel does not exist
+    if errors:
+        raise errors[-1]
     return None
+
+
+_YT_HOSTS = ("youtube.com", "youtu.be", "youtube-nocookie.com")
+
+
+def _foreign_host(url):
+    """Return the host if the input is clearly a non-YouTube web address."""
+    text = (url or "").strip()
+    if text.startswith("@") or "/" not in text and "." not in text:
+        return None  # bare handle like @MrBeast or MrBeast
+    candidate = text if "://" in text else "https://" + text
+    host = (urllib.parse.urlparse(candidate).hostname or "").lower()
+    if not host or "." not in host:
+        return None
+    if any(host == h or host.endswith("." + h) for h in _YT_HOSTS):
+        return None
+    return host
 
 
 # ---------------------------------------------------------------------------
