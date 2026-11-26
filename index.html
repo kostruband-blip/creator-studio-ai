@@ -225,35 +225,14 @@
 
   .tag-free { font-size: 10px; font-weight: 800; color: var(--good); border: 1px solid var(--good); border-radius: 999px; padding: 1px 7px; text-transform: uppercase; letter-spacing: .04em; }
 
-  /* locked group */
-  .locked-group { position: relative; }
-  .locked-cards { filter: blur(6px); opacity: .5; pointer-events: none; user-select: none; }
-  .lock-overlay {
-    position: absolute; inset: 0; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; text-align: center; gap: 12px;
-    background: rgba(8, 11, 18, 0.38); border-radius: 14px; padding: 18px;
+  /* ecosystem promo under the report */
+  .eco-promo {
+    margin-top: 26px; padding: 18px 20px; border-radius: var(--radius);
+    background: var(--card); border: 1px solid var(--border);
+    color: var(--muted); font-size: 15px; line-height: 1.55; text-align: center; overflow-wrap: anywhere;
   }
-  .lock-overlay .lock { font-size: 30px; }
-  .lock-overlay h4 { margin: 0; font-size: 17px; }
-  .lock-overlay p { margin: 0; color: var(--muted); font-size: 13.5px; max-width: 340px; }
-  .unlock-btn {
-    margin-top: 4px; border: 0; cursor: pointer; color: #fff; font-weight: 800; font-size: 14px;
-    background: var(--grad); border-radius: 12px; padding: 13px 18px;
-    box-shadow: 0 10px 26px rgba(124, 92, 255, 0.5); transition: transform .15s;
-    text-decoration: none; display: inline-block;
-  }
-  .unlock-btn:hover, .unlock-btn:focus-visible { transform: translateY(-1px); box-shadow: 0 14px 34px rgba(25, 200, 255, 0.55); }
-  .unlock-btn { white-space: normal; line-height: 1.3; max-width: 100%; }
-  .tg-cta {
-    margin-top: 22px; text-align: center; padding: 24px 18px; border-radius: var(--radius);
-    background: linear-gradient(135deg, rgba(124, 92, 255, 0.16), rgba(25, 200, 255, 0.12));
-    border: 1px solid rgba(124, 92, 255, 0.55);
-  }
-  .tg-cta h3 { margin: 0 0 6px; font-size: 20px; }
-  .tg-cta p { margin: 0 0 14px; color: var(--muted); }
-  .tg-cta .unlock-btn { font-size: 16px; padding: 15px 22px; animation: ctaGlow 2.4s ease-in-out infinite; }
-  @keyframes ctaGlow { 0%, 100% { box-shadow: 0 10px 26px rgba(124, 92, 255, 0.5); } 50% { box-shadow: 0 10px 38px rgba(25, 200, 255, 0.75); } }
-  @media (prefers-reduced-motion: reduce) { .tg-cta .unlock-btn { animation: none; } }
+  .eco-promo a { color: var(--accent2); font-weight: 700; text-decoration: none; }
+  .eco-promo a:hover, .eco-promo a:focus-visible { text-decoration: underline; }
 
   /* error */
   .error-box {
@@ -303,7 +282,7 @@
     </a>
     <a class="eco" href="https://creator-directory-chi.vercel.app" target="_blank" rel="noopener">
       <b id="eco2">CreatorDirectory</b>
-      <small id="eco2desc">Catalog of 60+ tools for creators</small>
+      <small id="eco2desc">Catalog of 65+ tools for creators</small>
     </a>
     <a class="tg-btn" id="tgHeaderBtn" href="https://t.me/remtex_shorts_ai_bot" target="_blank" rel="noopener"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M9.04 15.47 8.9 19.4c.4 0 .58-.17.79-.38l1.9-1.82 3.94 2.88c.72.4 1.24.19 1.43-.67l2.6-12.2c.24-1.08-.39-1.5-1.09-1.24L3.2 11.03c-1.04.4-1.03.98-.18 1.25l3.9 1.21 9.04-5.7c.43-.26.82-.12.5.17"/></svg><span id="tgOpen">Open in Telegram</span></a>
     <div class="lang-switch" id="langSwitch">
@@ -357,43 +336,21 @@
     <div class="competitors">
       <h2 class="section-title" id="competitorsTitle">Top 5 Competitors</h2>
       <div class="grid" id="competitorsFree"></div>
-      <div class="locked-group" id="competitorsLockedWrap">
-        <div class="grid locked-cards" id="competitorsLocked"></div>
-        <div class="lock-overlay">
-          <div class="lock">🔒</div>
-          <h4 id="lockedCompTitle">Unlock the complete report</h4>
-          <p id="lockedCompText">See all 5 competitors with full stats and 10 clickable video ideas.</p>
-          <a class="unlock-btn" id="unlockCompBtn" href="https://t.me/remtex_shorts_ai_bot" target="_blank" rel="noopener">Unlock All 5 Competitors &amp; 10 Ideas in Telegram →</a>
-        </div>
-      </div>
     </div>
 
     <!-- ideas -->
     <div class="ideas">
       <h2 class="section-title" id="ideasTitle">10 Viral Video Ideas for You</h2>
       <div class="grid" id="ideasFree"></div>
-      <div class="locked-group" id="ideasLockedWrap">
-        <div class="grid locked-cards" id="ideasLocked"></div>
-        <div class="lock-overlay">
-          <div class="lock">🔒</div>
-          <h4 id="lockedIdeaTitle">Unlock the complete report</h4>
-          <p id="lockedIdeaText">Get all 10 viral video ideas tailored to your niche.</p>
-          <a class="unlock-btn" id="unlockIdeaBtn" href="https://t.me/remtex_shorts_ai_bot" target="_blank" rel="noopener">Unlock All 5 Competitors &amp; 10 Ideas in Telegram →</a>
-        </div>
-      </div>
     </div>
 
-    <!-- Telegram CTA under the blurred cards -->
-    <div class="tg-cta" id="tgCta">
-      <h3 id="ctaTitle">Get the full report in Telegram</h3>
-      <p id="ctaText">All 5 competitors with stats and 10 video ideas are waiting in our bot @remtex_shorts_ai_bot.</p>
-      <a class="unlock-btn" id="unlockCtaBtn" href="https://t.me/remtex_shorts_ai_bot" target="_blank" rel="noopener">Unlock All 5 Competitors &amp; 10 Ideas in Telegram →</a>
-    </div>
+    <!-- ecosystem promo -->
+    <p class="eco-promo" id="ecoPromo">Want to turn long videos into viral Shorts in 2 minutes? Try <a href="https://koshorts.vercel.app" target="_blank" rel="noopener">KoShorts AI Studio</a> or explore 65+ creator tools in <a href="https://creator-directory-chi.vercel.app" target="_blank" rel="noopener">CreatorDirectory</a>.</p>
   </section>
 </div>
 
 <footer>
-  <span id="footerNote">Free analysis · Full report in our Telegram bot</span>
+  <span id="footerNote">Free full analysis · No sign-up</span>
   <div class="links">
     <a class="link" href="https://koshorts.vercel.app" target="_blank" rel="noopener" id="fEco1">KoShorts AI Studio</a>
     <a class="link" href="https://creator-directory-chi.vercel.app" target="_blank" rel="noopener" id="fEco2">CreatorDirectory</a>
@@ -419,21 +376,16 @@
       subscribers: "Subscribers",
       views: "Views",
       bestVideo: "Best video",
-      lockedTitle: "Unlock the complete report",
-      lockedCompText: "See all 5 competitors with full stats and 10 clickable video ideas.",
-      lockedIdeaText: "Get all 10 viral video ideas tailored to your niche.",
-      unlockBtn: "Unlock All 5 Competitors & 10 Ideas in Telegram →",
       tgOpen: "Open in Telegram",
-      ctaTitle: "Get the full report in Telegram",
-      ctaText: "All 5 competitors with stats and 10 video ideas are waiting in our bot @remtex_shorts_ai_bot.",
-      footerNote: "Free analysis · Full report in our Telegram bot",
+      footerNote: "Free full analysis · No sign-up",
       errTitle: "Setup needed",
       errGeneric: "Something went wrong",
       aiFallback: "Gemini AI was overloaded, so this report is built from YouTube data only: the niche comes from your video titles and the ideas are viral videos of your competitors. Try again in a few minutes for AI-written ideas.",
       eco1: "KoShorts AI Studio",
       eco1desc: "Cut Shorts from any YouTube link",
       eco2: "CreatorDirectory",
-      eco2desc: "Catalog of 60+ tools for creators"
+      eco2desc: "Catalog of 65+ tools for creators",
+      ecoPromo: "Want to turn long videos into viral Shorts in 2 minutes? Try {ko} or explore 65+ creator tools in {cd}."
     },
     ru: {
       tagline: "Найдите свою нишу и топ конкурентов на YouTube",
@@ -448,21 +400,16 @@
       subscribers: "Подписчики",
       views: "Просмотры",
       bestVideo: "Лучшее видео",
-      lockedTitle: "Откройте полный отчёт",
-      lockedCompText: "Все 5 конкурентов с полной статистикой и 10 кликабельных идей видео.",
-      lockedIdeaText: "Получите все 10 вирусных идей под вашу нишу.",
-      unlockBtn: "Разблокировать все 5 конкурентов и 10 идей в Telegram →",
       tgOpen: "Открыть в Telegram",
-      ctaTitle: "Полный отчёт — в Telegram",
-      ctaText: "Все 5 конкурентов со статистикой и 10 идей для видео ждут вас в нашем боте @remtex_shorts_ai_bot.",
-      footerNote: "Бесплатный анализ · Полный отчёт в нашем Telegram-боте",
+      footerNote: "Бесплатный полный анализ · Без регистрации",
       errTitle: "Требуется настройка",
       errGeneric: "Что-то пошло не так",
       aiFallback: "ИИ Gemini был перегружен, поэтому отчёт собран только по данным YouTube: ниша определена по названиям ваших видео, а идеи — это вирусные видео конкурентов. Попробуйте ещё раз через несколько минут, чтобы получить идеи от ИИ.",
       eco1: "KoShorts AI Studio",
       eco1desc: "Нарезка Shorts из любой YouTube-ссылки",
       eco2: "CreatorDirectory",
-      eco2desc: "Каталог 60+ инструментов для блогеров"
+      eco2desc: "Каталог 65+ инструментов для блогеров",
+      ecoPromo: "Хотите нарезать длинные видео в вирусные Shorts за 2 минуты? Попробуйте {ko} или откройте каталог 65+ сервисов {cd}."
     },
     ua: {
       tagline: "Знайдіть свою нішу та топ конкурентів на YouTube",
@@ -477,21 +424,16 @@
       subscribers: "Підписники",
       views: "Перегляди",
       bestVideo: "Найкраще відео",
-      lockedTitle: "Відкрийте повний звіт",
-      lockedCompText: "Усі 5 конкурентів з повною статистикою та 10 клікабельних ідей відео.",
-      lockedIdeaText: "Отримайте всі 10 вірусних ідей під вашу нішу.",
-      unlockBtn: "Розблокувати всіх 5 конкурентів і 10 ідей у Telegram →",
       tgOpen: "Відкрити в Telegram",
-      ctaTitle: "Повний звіт — у Telegram",
-      ctaText: "Усі 5 конкурентів зі статистикою та 10 ідей для відео чекають на вас у нашому боті @remtex_shorts_ai_bot.",
-      footerNote: "Безкоштовний аналіз · Повний звіт у нашому Telegram-боті",
+      footerNote: "Безкоштовний повний аналіз · Без реєстрації",
       errTitle: "Потрібне налаштування",
       errGeneric: "Щось пішло не так",
       aiFallback: "ШІ Gemini був перевантажений, тому звіт зібрано лише за даними YouTube: нішу визначено за назвами ваших відео, а ідеї — це вірусні відео конкурентів. Спробуйте ще раз за кілька хвилин, щоб отримати ідеї від ШІ.",
       eco1: "KoShorts AI Studio",
       eco1desc: "Нарізка Shorts з будь-якого посилання YouTube",
       eco2: "CreatorDirectory",
-      eco2desc: "Каталог 60+ інструментів для блогерів"
+      eco2desc: "Каталог 65+ інструментів для блогерів",
+      ecoPromo: "Хочете нарізати довгі відео у вірусні Shorts за 2 хвилини? Спробуйте {ko} або відкрийте каталог 65+ сервісів {cd}."
     }
   };
 
@@ -529,16 +471,11 @@
     el("nicheTitle").textContent = t("nicheTitle");
     el("competitorsTitle").textContent = t("competitorsTitle");
     el("ideasTitle").textContent = t("ideasTitle");
-    el("lockedCompTitle").textContent = t("lockedTitle");
-    el("lockedCompText").textContent = t("lockedCompText");
-    el("lockedIdeaTitle").textContent = t("lockedTitle");
-    el("lockedIdeaText").textContent = t("lockedIdeaText");
-    el("unlockCompBtn").textContent = t("unlockBtn");
-    el("unlockIdeaBtn").textContent = t("unlockBtn");
-    el("unlockCtaBtn").textContent = t("unlockBtn");
     el("tgOpen").textContent = t("tgOpen");
-    el("ctaTitle").textContent = t("ctaTitle");
-    el("ctaText").textContent = t("ctaText");
+    // promo sentence with two links; text is escaped, links are fixed
+    el("ecoPromo").innerHTML = escapeHtml(t("ecoPromo"))
+      .replace("{ko}", '<a href="https://koshorts.vercel.app" target="_blank" rel="noopener">KoShorts AI Studio</a>')
+      .replace("{cd}", '<a href="https://creator-directory-chi.vercel.app" target="_blank" rel="noopener">CreatorDirectory</a>');
     el("footerNote").textContent = t("footerNote");
     el("errorTitle").textContent = t("errTitle");
     el("eco1").textContent = t("eco1");
@@ -626,16 +563,16 @@
   }
 
   // ---------- Rendering results ----------
-  function compCard(c, locked) {
+  function compCard(c) {
     // A <div>, not an <a>: the best-video link inside must not be nested in another link.
     var html = '<div class="card comp">';
     html += '<img src="' + escapeHtml(c.avatar || "") + '" alt="" onerror="this.style.visibility=\'hidden\'">';
     html += '<div class="c-body">';
-    html += '<h4><a class="c-link" href="' + escapeHtml(c.url) + '" target="_blank" rel="noopener"' + (locked ? ' tabindex="-1"' : "") + ">" + escapeHtml(c.title) + "</a></h4>";
+    html += '<h4><a class="c-link" href="' + escapeHtml(c.url) + '" target="_blank" rel="noopener"' + ">" + escapeHtml(c.title) + "</a></h4>";
     html += '<div class="stats"><span>' + escapeHtml(t("subscribers")) + ": <b>" + fmt(c.subscribers) + "</b></span>";
     html += "<span>" + escapeHtml(t("views")) + ": <b>" + fmt(c.views) + "</b></span></div>";
     if (c.bestVideo && c.bestVideo.title) {
-      html += '<div class="best">' + escapeHtml(t("bestVideo")) + ': <a href="' + escapeHtml(c.bestVideo.url) + '" target="_blank" rel="noopener"' + (locked ? ' tabindex="-1"' : "") + ">" + escapeHtml(c.bestVideo.title) + "</a></div>";
+      html += '<div class="best">' + escapeHtml(t("bestVideo")) + ': <a href="' + escapeHtml(c.bestVideo.url) + '" target="_blank" rel="noopener"' + ">" + escapeHtml(c.bestVideo.title) + "</a></div>";
     }
     html += "</div></div>";
     return html;
@@ -679,27 +616,9 @@
     nicheHtml += "</div>";
     el("nicheCard").innerHTML = nicheHtml;
 
-    // competitors: 2 free + 3 locked
-    var freeComp = competitors.slice(0, 2);
-    var lockedComp = competitors.slice(2, 5);
-    el("competitorsFree").innerHTML = freeComp.map(function (c) { return compCard(c, false); }).join("");
-    if (lockedComp.length) {
-      el("competitorsLockedWrap").classList.remove("hidden");
-      el("competitorsLocked").innerHTML = lockedComp.map(function (c) { return compCard(c, true); }).join("");
-    } else {
-      el("competitorsLockedWrap").classList.add("hidden");
-    }
-
-    // ideas: 3 free + 7 locked
-    var freeIdeas = ideas.slice(0, 3);
-    var lockedIdeas = ideas.slice(3, 10);
-    el("ideasFree").innerHTML = freeIdeas.map(function (it, i) { return ideaCard(it, i); }).join("");
-    if (lockedIdeas.length) {
-      el("ideasLockedWrap").classList.remove("hidden");
-      el("ideasLocked").innerHTML = lockedIdeas.map(function (it, i) { return ideaCard(it, i + 3); }).join("");
-    } else {
-      el("ideasLockedWrap").classList.add("hidden");
-    }
+    // all 5 competitors and all 10 ideas are shown open
+    el("competitorsFree").innerHTML = competitors.slice(0, 5).map(function (c) { return compCard(c); }).join("");
+    el("ideasFree").innerHTML = ideas.slice(0, 10).map(function (it, i) { return ideaCard(it, i); }).join("");
 
     hideStatus();
     el("error").classList.add("hidden");
