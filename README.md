@@ -64,6 +64,11 @@ blurred, locked cards with a single call-to-action button that opens the full re
 | `GEMINI_API_KEY_2`   | optional | Second Gemini key (used in the rotation pool).                      |
 | `GEMINI_API_KEY_3`   | optional | Third Gemini key (used in the rotation pool).                       |
 
+> **Key formats (2026):**
+> - `YOUTUBE_API_KEY` — Google Cloud → APIs & Services → Credentials → *Create credentials → API key*. Starts with `AIza…`.
+> - `GEMINI_API_KEY` — Google AI Studio → *Create API key*. New keys start with `AQ.…` (legacy `AIza…` Gemini keys are being phased out). Both formats work: the key is sent via the `x-goog-api-key` header.
+> - ⚠️ A value like `{"token":"ya29.…"}` is a short-lived **OAuth access token**, not an API key — it will not work here.
+
 3. Redeploy the project so the new variables are picked up.
 
 That's it — visit the deployed site, paste a YouTube link, and analyze.

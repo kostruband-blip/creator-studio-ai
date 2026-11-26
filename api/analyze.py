@@ -283,7 +283,7 @@ def get_videos_from_playlist(playlist_id, max_results=12):
 
 
 def _gemini_request(model, key, prompt):
-    url = GEMINI_BASE + model + ":generateContent?key=" + key
+    url = GEMINI_BASE + model + ":generateContent"
     body = {
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
         "generationConfig": {
@@ -296,7 +296,11 @@ def _gemini_request(model, key, prompt):
     req = urllib.request.Request(
         url,
         data=data,
-        headers={"Content-Type": "application/json"},
+        # Works with both the new "AQ." auth keys and legacy "AIza" keys.
+        headers={
+            "Content-Type": "application/json",
+            "x-goog-api-key": key.strip(),
+        },
         method="POST",
     )
     try:
