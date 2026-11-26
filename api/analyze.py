@@ -43,12 +43,28 @@ GEMINI_KEYS = [
 ]
 
 # Carousel of models and keys. We rotate both to dodge 429/503 errors.
-GEMINI_MODELS = [
+# Primary carousel first, then free-tier fallbacks. Gemini limits are counted
+# per model (and per Google Cloud project), so extra models really help on 429.
+# Override with env GEMINI_MODELS="model-a,model-b".
+_DEFAULT_MODELS = [
     "gemini-flash-latest",
     "gemini-3.8-flash",
     "gemini-3.7-flash",
     "gemini-pro-latest",
+    "gemini-3.6-flash",
+    "gemini-2.5-flash",
+    "gemini-flash-lite-latest",
+    "gemini-3.5-flash-lite",
+    "gemini-2.5-flash-lite",
 ]
+GEMINI_MODELS = [
+    m.strip()
+    for m in (os.environ.get("GEMINI_MODELS") or ",".join(_DEFAULT_MODELS)).split(",")
+    if m.strip()
+]
+
+# Total time we allow Gemini attempts for one call (Vercel maxDuration is 60s).
+GEMINI_BUDGET_SEC = 30
 
 # Rotating cursor so every cold start does not hammer the same key/model.
 _GEMINI_CURSOR = {"i": 0}
@@ -60,9 +76,12 @@ GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models/"
 class GeminiFail(Exception):
     """Raised when a Gemini call fails."""
 
-    def __init__(self, retryable, message):
+    def __init__(self, retryable, message, code=0, kind=""):
         self.retryable = retryable
         self.message = message
+        self.code = code
+        # kind: "quota" | "model" | "key" | "transient" | "bad_response" | ""
+        self.kind = kind
         super().__init__(message)
 
 
@@ -282,14 +301,29 @@ def get_videos_from_playlist(playlist_id, max_results=12):
 # ---------------------------------------------------------------------------
 
 
-def _gemini_request(model, key, prompt):
+def _google_error_message(detail):
+    """Pull the human-readable message out of a Google error body."""
+    try:
+        j = json.loads(detail)
+        err = j.get("error") or {}
+        if isinstance(err, dict):
+            return str(err.get("message") or err.get("status") or "")[:300]
+        return str(err)[:300]
+    except Exception:
+        return (detail or "")[:300]
+
+
+def _gemini_request(model, key, prompt, timeout=30):
     url = GEMINI_BASE + model + ":generateContent"
     body = {
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
         "generationConfig": {
             "temperature": 0.9,
             "topP": 1,
-            "maxOutputTokens": 2048,
+            # Thinking models spend output tokens on reasoning; leave headroom
+            # so the JSON answer is not truncated.
+            "maxOutputTokens": 8192,
+            "responseMimeType": "application/json",
         },
     }
     data = json.dumps(body).encode("utf-8")
@@ -304,53 +338,151 @@ def _gemini_request(model, key, prompt):
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=40) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             raw = resp.read().decode("utf-8")
     except urllib.error.HTTPError as e:
-        if e.code in (429, 500, 503):
-            raise GeminiFail(True, "HTTP %d" % e.code)
         try:
             detail = e.read().decode("utf-8", "ignore")
         except Exception:
             detail = ""
-        raise GeminiFail(False, "HTTP %d: %s" % (e.code, detail[:300]))
+        msg = _google_error_message(detail)
+        text = "HTTP %d%s" % (e.code, (": " + msg) if msg else "")
+        if e.code == 429:
+            raise GeminiFail(True, text, e.code, "quota")
+        if e.code in (500, 502, 503, 504):
+            raise GeminiFail(True, text, e.code, "transient")
+        if e.code == 404 or (e.code == 400 and "model" in msg.lower()):
+            raise GeminiFail(True, text, e.code, "model")
+        if e.code in (401, 403) or (e.code == 400 and "api key" in msg.lower()):
+            raise GeminiFail(True, text, e.code, "key")
+        raise GeminiFail(False, text, e.code, "")
     except Exception as e:  # network / timeout
-        raise GeminiFail(True, str(e))
+        raise GeminiFail(True, str(e)[:200], 0, "transient")
 
     try:
         j = json.loads(raw)
-        return j["candidates"][0]["content"]["parts"][0]["text"]
+        parts = j["candidates"][0]["content"]["parts"]
+        # Skip "thought" parts; join the visible text.
+        text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+        if not text:
+            raise ValueError("empty text")
+        return text
     except Exception as e:
-        raise GeminiFail(False, "Unexpected Gemini response: %s" % str(e)[:200])
+        raise GeminiFail(True, "Unexpected Gemini response: %s" % str(e)[:200], 0, "bad_response")
 
 
 def call_gemini(prompt):
-    """Try every (key, model) combination, rotating on retryable errors."""
+    """Try (model, key) combinations, skipping dead models and keys.
+
+    - 404 / unknown model  -> skip that model for every key
+    - 401 / 403 bad key    -> skip that key for every model
+    - 429 quota            -> try the next key / model
+    - 5xx / timeout        -> try the next combination
+    """
     if not GEMINI_KEYS:
         raise GeminiFail(False, "NO_KEYS")
 
-    combos = [(m, k) for m in range(len(GEMINI_MODELS)) for k in range(len(GEMINI_KEYS))]
-    start = _GEMINI_CURSOR["i"] % len(combos)
-    last_err = None
+    started = time.time()
+    dead_models, dead_keys = set(), set()
+    errors = []  # (model, key_index, GeminiFail)
 
-    for off in range(len(combos)):
-        idx = (start + off) % len(combos)
-        _GEMINI_CURSOR["i"] = (idx + 1) % len(combos)
-        model_i, key_i = combos[idx]
-        model = GEMINI_MODELS[model_i]
-        key = GEMINI_KEYS[key_i]
-        try:
-            return _gemini_request(model, key, prompt)
-        except GeminiFail as e:
-            last_err = e
-            if e.retryable:
+    # Start from the model that answered last time (warm instances keep it).
+    n = len(GEMINI_MODELS)
+    start = _GEMINI_CURSOR["i"] % n
+    order = [GEMINI_MODELS[(start + i) % n] for i in range(n)]
+
+    for model in order:
+        for key_i, key in enumerate(GEMINI_KEYS):
+            if model in dead_models:
+                break
+            if key_i in dead_keys:
                 continue
-            # Fatal: do not burn the remaining combinations.
-            raise
+            remaining = GEMINI_BUDGET_SEC - (time.time() - started)
+            if remaining < 3:
+                break
+            try:
+                text = _gemini_request(model, key, prompt, timeout=min(30, remaining))
+                _GEMINI_CURSOR["i"] = GEMINI_MODELS.index(model)
+                return text
+            except GeminiFail as e:
+                errors.append((model, key_i, e))
+                if e.kind == "model":
+                    dead_models.add(model)
+                elif e.kind == "key":
+                    dead_keys.add(key_i)
+                elif not e.retryable:
+                    raise
+        if len(dead_keys) == len(GEMINI_KEYS):
+            break
 
-    if last_err is not None:
-        raise last_err
-    raise GeminiFail(True, "All Gemini attempts failed")
+    raise GeminiFail(False, _summarize_gemini_errors(errors), 0, _dominant_kind(errors))
+
+
+def _dominant_kind(errors):
+    kinds = [e.kind for _, _, e in errors]
+    for k in ("key", "quota", "transient", "model", "bad_response"):
+        if kinds and all(x in (k, "model") for x in kinds) and k in kinds:
+            return k
+    return "quota" if "quota" in kinds else (kinds[-1] if kinds else "")
+
+
+def _summarize_gemini_errors(errors):
+    if not errors:
+        return "No Gemini attempt could be made (time budget exhausted)."
+    kind = _dominant_kind(errors)
+    tried = len(errors)
+    sample = next((e.message for _, _, e in errors if e.kind == kind), errors[-1][2].message)
+    if kind == "quota":
+        head = "All Gemini models returned 429 (quota / rate limit exceeded)."
+    elif kind == "key":
+        head = "Gemini rejected the API key (401/403). Check GEMINI_API_KEY."
+    elif kind == "transient":
+        head = "Gemini is temporarily unavailable (5xx / timeout)."
+    elif kind == "model":
+        head = "None of the configured Gemini models is available for this key."
+    else:
+        head = "Gemini request failed."
+    return "%s Attempts: %d. Google says: %s" % (head, tried, sample[:260])
+
+
+GEMINI_QUOTA_HELP = {
+    "title": "Gemini quota exceeded",
+    "steps": [
+        "Free Gemini limits are counted per Google Cloud project and per model; "
+        "daily limits reset at midnight Pacific time.",
+        "Check your live limits: https://aistudio.google.com/rate-limit",
+        "Wait a minute and try again, or try again after the daily reset.",
+        "Add GEMINI_API_KEY_2 / GEMINI_API_KEY_3 created in DIFFERENT Google "
+        "Cloud projects (keys from the same project share one quota), then redeploy.",
+        "Or enable billing for the project in AI Studio to get higher limits.",
+    ],
+}
+
+GEMINI_KEY_HELP = {
+    "title": "Gemini API key problem",
+    "steps": [
+        "Create a key at https://aistudio.google.com/apikey (new keys start with 'AQ.').",
+        "Use 'Copy key' in the key details - the list shows a shortened, masked value.",
+        "In Vercel set GEMINI_API_KEY to that value and redeploy.",
+    ],
+}
+
+
+class GeminiStepError(RuntimeError):
+    """RuntimeError that also carries setup/help steps for the UI."""
+
+    def __init__(self, message, setup=None):
+        super().__init__(message)
+        self.setup = setup
+
+
+def _gemini_step_error(step, e):
+    setup = None
+    if e.kind == "quota":
+        setup = GEMINI_QUOTA_HELP
+    elif e.kind == "key":
+        setup = GEMINI_KEY_HELP
+    return GeminiStepError("Gemini %s failed: %s" % (step, e.message), setup)
 
 
 def extract_json(text):
@@ -406,7 +538,7 @@ def determine_niche(channel, videos):
                 "configured in Vercel. Add it in Project Settings -> "
                 "Environment Variables, then redeploy."
             )
-        raise RuntimeError("Gemini niche analysis failed: %s" % e.message)
+        raise _gemini_step_error("niche analysis", e)
     except Exception as e:
         raise RuntimeError("Gemini niche analysis failed: %s" % e)
 
@@ -564,7 +696,7 @@ def generate_ideas(niche, lang_hint, competitors):
                 "GEMINI_API_KEY is not configured in Vercel. Add it in "
                 "Project Settings -> Environment Variables, then redeploy."
             )
-        raise RuntimeError("Gemini idea generation failed: %s" % e.message)
+        raise _gemini_step_error("idea generation", e)
     except Exception as e:
         raise RuntimeError("Gemini idea generation failed: %s" % e)
 
@@ -706,7 +838,10 @@ def analyze(url):
             "language": channel.get("language") or "",
         }
     except RuntimeError as e:
-        return {"success": False, "error": str(e)}
+        out = {"success": False, "error": str(e)}
+        if getattr(e, "setup", None):
+            out["setup"] = e.setup
+        return out
     except ValueError as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
