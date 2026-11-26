@@ -28,9 +28,11 @@ useful to check whether subtitles are reachable from the server.
 """
 
 import html
+import ipaddress
 import json
 import os
 import re
+import socket
 import sys
 import time
 import urllib.error
@@ -769,6 +771,57 @@ def video_media(src):
             "generation": {"mediaResolution": "MEDIA_RESOLUTION_LOW"}}
 
 
+def proxy_check():
+    """Where exactly Vercel tries to reach SUBS_PROXY_URL (no token, no query) and whether the port answers."""
+    if not SUBS_PROXY_URL:
+        return {"configured": False}
+    u = urllib.parse.urlsplit(SUBS_PROXY_URL)
+    host = u.hostname or ""
+    try:
+        port = u.port or (443 if u.scheme == "https" else 80)
+    except ValueError:
+        return {"configured": True, "hints": ["the port in SUBS_PROXY_URL is not a number"]}
+    out = {"configured": True, "scheme": u.scheme or "(none)", "host": host or "(none)", "port": port,
+           "path": u.path or "/", "token_set": bool(SUBS_PROXY_TOKEN)}
+    hints = []
+    if u.scheme not in ("http", "https"):
+        hints.append("SUBS_PROXY_URL must start with https:// (or http://)")
+    if not host:
+        out["hints"] = hints or ["SUBS_PROXY_URL has no host"]
+        return out
+    try:
+        ips = sorted({ai[4][0] for ai in socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)})
+    except Exception as e:
+        out["dns"] = "failed: %s" % str(e)[:80]
+        out["hints"] = hints + ["the host name does not resolve on the internet"]
+        return out
+    out["ips"] = ips[:4]
+    private = []
+    for ip in ips:
+        try:
+            a = ipaddress.ip_address(ip)
+            if a.is_private or a.is_loopback or a.is_link_local or a.is_reserved:
+                private.append(ip)
+        except ValueError:
+            pass
+    if private:
+        hints.append("%s is a local/private address: Vercel cannot reach it, use a public IP or domain"
+                     % ", ".join(private))
+    t0 = time.time()
+    try:
+        sock = socket.create_connection((ips[0], port), timeout=6)
+        sock.close()
+        out["tcp"] = "open (%.1fs)" % (time.time() - t0)
+    except Exception as e:
+        out["tcp"] = "%s after %.1fs: %s" % (type(e).__name__, time.time() - t0, str(e)[:80])
+        hints.append("port %d on %s does not answer from the internet: open it in the server firewall / "
+                     "cloud security group / router port forwarding, and make the server listen on 0.0.0.0, "
+                     "not 127.0.0.1" % (port, ips[0]))
+    if hints:
+        out["hints"] = hints
+    return out
+
+
 def probe(url):
     start_request(REQUEST_BUDGET)  # same budget as a real run, so the subtitle step is really tried
     src = collect(url, "")
@@ -783,6 +836,7 @@ def probe(url):
         "subtitles_reason": src.get("subtitles_reason"),
         "transcript_chars": len((src.get("transcript") or {}).get("text", "")),
         "warnings": src["warnings"],
+        "subs_proxy_check": proxy_check(),
     }
 
 
@@ -823,6 +877,9 @@ class handler(BaseHTTPRequestHandler):  # noqa: N801 - required name for Vercel
 
     def do_GET(self):
         q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        if q.get("proxycheck"):
+            _send_json(self, {"status": "ok", "subs_proxy_check": proxy_check()})
+            return
         if q.get("probe"):
             try:
                 _send_json(self, probe(q["probe"][0]))
