@@ -42,32 +42,55 @@ GEMINI_KEYS = [
     if k and k.strip()
 ]
 
-# Carousel of models and keys. We rotate both to dodge 429/503 errors.
-# Primary carousel first, then free-tier fallbacks. Gemini limits are counted
-# per model (and per Google Cloud project), so extra models really help on 429.
-# Override with env GEMINI_MODELS="model-a,model-b".
-_DEFAULT_MODELS = [
+# ---------------------------------------------------------------------------
+# Gemini model carousel
+#
+# 1. Ask Gemini which models this key can use (GET /v1beta/models, ListModels).
+# 2. Keep only text models (support generateContent; no embedding / image /
+#    TTS / audio / live / video models).
+# 3. Walk the list as a ring. The model that answered last time is tried first
+#    on the next request; on failure we move to the next model around the ring.
+#
+# Override with env GEMINI_MODELS="model-a,model-b" to skip discovery.
+# ---------------------------------------------------------------------------
+
+# Used only if ListModels itself fails (network / bad key).
+_FALLBACK_MODELS = [
     "gemini-flash-latest",
     "gemini-3.8-flash",
-    "gemini-3.7-flash",
-    "gemini-pro-latest",
     "gemini-3.6-flash",
     "gemini-2.5-flash",
     "gemini-flash-lite-latest",
     "gemini-3.5-flash-lite",
     "gemini-2.5-flash-lite",
+    "gemini-pro-latest",
 ]
-GEMINI_MODELS = [
-    m.strip()
-    for m in (os.environ.get("GEMINI_MODELS") or ",".join(_DEFAULT_MODELS)).split(",")
+
+_ENV_MODELS = [
+    m.strip().replace("models/", "")
+    for m in (os.environ.get("GEMINI_MODELS") or "").split(",")
     if m.strip()
 ]
 
-# Total time we allow Gemini attempts for one call (Vercel maxDuration is 60s).
-GEMINI_BUDGET_SEC = 30
+# Words that mark non-text models (embeddings, images, speech, video, ...).
+_NON_TEXT_MARKERS = (
+    "embed", "image", "imagen", "banana", "tts", "audio", "speech", "live",
+    "veo", "video", "lyria", "music", "aqa", "robotics", "computer-use",
+    "transcribe", "vision", "native",
+)
 
-# Rotating cursor so every cold start does not hammer the same key/model.
-_GEMINI_CURSOR = {"i": 0}
+MODEL_LIST_TTL_SEC = 15 * 60   # re-discover models every 15 minutes
+GEMINI_BUDGET_SEC = 30         # time for all Gemini attempts of one call
+
+# Shared state of a warm serverless instance.
+_MODEL_STATE = {
+    "models": [],       # discovered text models, in ring order
+    "fetched_at": 0.0,
+    "source": "",       # "api" | "env" | "fallback"
+    "current": None,    # model that answered last -> tried first next time
+}
+_MODEL_COOLDOWN = {}    # model -> unix time until which we skip it
+_NO_JSON_MODE = set()   # models that reject responseMimeType=application/json
 
 YT_BASE = "https://www.googleapis.com/youtube/v3/"
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models/"
@@ -313,7 +336,7 @@ def _google_error_message(detail):
         return (detail or "")[:300]
 
 
-def _gemini_request(model, key, prompt, timeout=30):
+def _gemini_request(model, key, prompt, timeout=30, json_mode=True):
     url = GEMINI_BASE + model + ":generateContent"
     body = {
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
@@ -323,9 +346,10 @@ def _gemini_request(model, key, prompt, timeout=30):
             # Thinking models spend output tokens on reasoning; leave headroom
             # so the JSON answer is not truncated.
             "maxOutputTokens": 8192,
-            "responseMimeType": "application/json",
         },
     }
+    if json_mode:
+        body["generationConfig"]["responseMimeType"] = "application/json"
     data = json.dumps(body).encode("utf-8")
     req = urllib.request.Request(
         url,
@@ -347,6 +371,9 @@ def _gemini_request(model, key, prompt, timeout=30):
             detail = ""
         msg = _google_error_message(detail)
         text = "HTTP %d%s" % (e.code, (": " + msg) if msg else "")
+        low = msg.lower()
+        if e.code == 400 and json_mode and ("json mode" in low or "mime" in low):
+            raise GeminiFail(True, text, e.code, "json_mode")
         if e.code == 429:
             raise GeminiFail(True, text, e.code, "quota")
         if e.code in (500, 502, 503, 504):
@@ -371,47 +398,171 @@ def _gemini_request(model, key, prompt, timeout=30):
         raise GeminiFail(True, "Unexpected Gemini response: %s" % str(e)[:200], 0, "bad_response")
 
 
-def call_gemini(prompt):
-    """Try (model, key) combinations, skipping dead models and keys.
+def _is_text_model(m):
+    name = (m.get("name") or "").replace("models/", "")
+    methods = m.get("supportedGenerationMethods") or []
+    if "generateContent" not in methods:
+        return False
+    if not (name.startswith("gemini") or name.startswith("gemma")):
+        return False
+    low = name.lower()
+    return not any(marker in low for marker in _NON_TEXT_MARKERS)
 
-    - 404 / unknown model  -> skip that model for every key
-    - 401 / 403 bad key    -> skip that key for every model
-    - 429 quota            -> try the next key / model
-    - 5xx / timeout        -> try the next combination
+
+def _model_rank(name):
+    """Sort key: fast free-tier text models first, heavy / paid ones last."""
+    low = name.lower()
+    m = re.search(r"(\d+(?:\.\d+)?)", low)
+    version = float(m.group(1)) if m else 0.0
+    # previews, experiments and dated snapshots (e.g. -001, -05-20) go later
+    unstable = ("preview" in low or "exp" in low
+                or re.search(r"-\d{3}$|-\d{2}-\d{2}", low) is not None)
+    if low.startswith("gemma"):
+        group = 6
+    elif low == "gemini-flash-latest":
+        group = 0
+    elif "flash" in low and "lite" not in low:
+        group = 2 if unstable else 1
+    elif "flash" in low and "lite" in low:
+        group = 3
+    elif "pro" in low:
+        group = 5
+    else:
+        group = 4
+    return (group, -version, low)
+
+
+def list_text_models(key, timeout=8):
+    """ListModels for one key, filtered to text-generation models."""
+    found, page_token = [], ""
+    for _ in range(5):  # pagination guard
+        url = GEMINI_BASE.rstrip("/") + "?pageSize=1000"
+        if page_token:
+            url += "&pageToken=" + urllib.parse.quote(page_token)
+        req = urllib.request.Request(url, headers={"x-goog-api-key": key.strip()})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        for m in data.get("models") or []:
+            if _is_text_model(m):
+                name = m["name"].replace("models/", "")
+                if name not in found:
+                    found.append(name)
+        page_token = data.get("nextPageToken") or ""
+        if not page_token:
+            break
+    return sorted(found, key=_model_rank)
+
+
+def get_text_models(force=False):
+    """Discovered text models (cached per warm instance)."""
+    st = _MODEL_STATE
+    if _ENV_MODELS:
+        if st["source"] != "env":
+            st.update(models=list(_ENV_MODELS), source="env", fetched_at=time.time())
+        return st["models"]
+    fresh = time.time() - st["fetched_at"] < MODEL_LIST_TTL_SEC
+    if st["models"] and fresh and not force:
+        return st["models"]
+    for key in GEMINI_KEYS:
+        try:
+            models = list_text_models(key)
+        except Exception:
+            continue
+        if models:
+            st.update(models=models, source="api", fetched_at=time.time())
+            if st["current"] not in models:
+                st["current"] = None
+            return models
+    # Discovery failed: keep the previous list if any, else the static one.
+    if not st["models"]:
+        st.update(models=list(_FALLBACK_MODELS), source="fallback", fetched_at=time.time())
+    return st["models"]
+
+
+def _ring_order(models):
+    """Models in ring order, starting from the last model that answered."""
+    cur = _MODEL_STATE["current"]
+    start = models.index(cur) if cur in models else 0
+    order = [models[(start + i) % len(models)] for i in range(len(models))]
+    now = time.time()
+    ready = [m for m in order if _MODEL_COOLDOWN.get(m, 0) <= now]
+    return ready or order  # if everything is cooling down, try anyway
+
+
+def _cooldown_for(e):
+    """How long to skip a model after this error (seconds)."""
+    msg = (e.message or "").lower()
+    if e.kind == "model":
+        return MODEL_LIST_TTL_SEC          # not available for this key
+    if e.kind == "quota":
+        if "limit: 0" in msg or "limit:0" in msg:
+            return MODEL_LIST_TTL_SEC      # no free quota for this model at all
+        if "perday" in msg or "per day" in msg or "daily" in msg:
+            return MODEL_LIST_TTL_SEC      # daily quota used up
+        return 30                          # per-minute limit
+    if e.kind == "transient":
+        return 15
+    return 0
+
+
+def call_gemini(prompt):
+    """Send a prompt through the model carousel.
+
+    Ring of discovered text models; for each model every key is tried
+    (keys from different Google Cloud projects have separate quotas).
+    The model that succeeds becomes the first one for the next request.
     """
     if not GEMINI_KEYS:
         raise GeminiFail(False, "NO_KEYS")
 
     started = time.time()
-    dead_models, dead_keys = set(), set()
+    models = get_text_models()
+    dead_keys = set()
     errors = []  # (model, key_index, GeminiFail)
 
-    # Start from the model that answered last time (warm instances keep it).
-    n = len(GEMINI_MODELS)
-    start = _GEMINI_CURSOR["i"] % n
-    order = [GEMINI_MODELS[(start + i) % n] for i in range(n)]
-
-    for model in order:
+    for model in _ring_order(models):
         for key_i, key in enumerate(GEMINI_KEYS):
-            if model in dead_models:
-                break
             if key_i in dead_keys:
                 continue
             remaining = GEMINI_BUDGET_SEC - (time.time() - started)
             if remaining < 3:
-                break
+                raise GeminiFail(False, _summarize_gemini_errors(errors), 0, _dominant_kind(errors))
             try:
-                text = _gemini_request(model, key, prompt, timeout=min(30, remaining))
-                _GEMINI_CURSOR["i"] = GEMINI_MODELS.index(model)
-                return text
+                text = _gemini_request(
+                    model, key, prompt,
+                    timeout=min(30, remaining),
+                    json_mode=model not in _NO_JSON_MODE,
+                )
             except GeminiFail as e:
+                if e.kind == "json_mode":
+                    # e.g. Gemma: retry the same model without JSON mode.
+                    _NO_JSON_MODE.add(model)
+                    try:
+                        text = _gemini_request(model, key, prompt, timeout=min(30, remaining), json_mode=False)
+                    except GeminiFail as e2:
+                        e = e2
+                    else:
+                        _MODEL_STATE["current"] = model
+                        _MODEL_COOLDOWN.pop(model, None)
+                        return text
                 errors.append((model, key_i, e))
-                if e.kind == "model":
-                    dead_models.add(model)
-                elif e.kind == "key":
+                if e.kind == "key":
                     dead_keys.add(key_i)
-                elif not e.retryable:
+                    continue
+                if e.kind == "model":
+                    break  # model missing: skip remaining keys for it
+                if not e.retryable:
                     raise
+                continue
+            _MODEL_STATE["current"] = model
+            _MODEL_COOLDOWN.pop(model, None)
+            return text
+        # every key failed for this model -> cool it down, go to next in ring
+        model_errors = [e for m, _, e in errors if m == model]
+        if model_errors:
+            cd = min(_cooldown_for(e) for e in model_errors) if model_errors else 0
+            if cd:
+                _MODEL_COOLDOWN[model] = time.time() + cd
         if len(dead_keys) == len(GEMINI_KEYS):
             break
 
@@ -880,6 +1031,21 @@ class handler(BaseHTTPRequestHandler):  # noqa: N801 - required name for Vercel
         self.end_headers()
 
     def do_GET(self):
+        query = urllib.parse.urlparse(self.path).query
+        if "models" in urllib.parse.parse_qs(query):
+            # Diagnostics: which text models the carousel will use.
+            # Never exposes the keys themselves.
+            models = get_text_models(force=True) if GEMINI_KEYS else []
+            now = time.time()
+            _send_json(self, {
+                "status": "ok",
+                "source": _MODEL_STATE["source"] or "none",
+                "current": _MODEL_STATE["current"],
+                "keys_configured": len(GEMINI_KEYS),
+                "text_models": models,
+                "cooling_down": sorted(m for m, t in _MODEL_COOLDOWN.items() if t > now),
+            })
+            return
         _send_json(self, {"status": "ok", "service": "NicheRadar AI"})
 
     def do_POST(self):
