@@ -6,8 +6,23 @@
       "maxDuration": 120,
       "memory": 256,
       "includeFiles": "api/_gemini.py"
+    },
+    "api/thumbnails.py": {
+      "maxDuration": 60,
+      "memory": 256,
+      "includeFiles": "api/_gemini.py"
     }
   },
+  "rewrites": [
+    {
+      "source": "/thumbnails",
+      "destination": "/thumbnails.html"
+    },
+    {
+      "source": "/thumbnails/",
+      "destination": "/thumbnails.html"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

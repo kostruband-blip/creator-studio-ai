@@ -2,19 +2,26 @@
 """
 Local preview server for NicheRadar AI.
 
-Serves index.html and a MOCK /api/analyze endpoint so the full UI
-(niche card, free competitors/ideas + blurred paywall) can be previewed
-without YouTube/Gemini API keys. The real endpoint is api/analyze.py on Vercel.
+Serves index.html (NicheRadar), /thumbnails (Thumbnail & Title Lab) and MOCK
+/api/analyze + /api/thumbnails endpoints, so the full UI can be previewed
+without YouTube/Gemini API keys. Real endpoints: api/analyze.py, api/thumbnails.py.
 
 Run:  python3 preview_server.py   (listens on 0.0.0.0:3000)
 """
 import json
 import os
+import sys
 import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(ROOT, "api"))
+import thumbnails as thumbs_api  # noqa: E402  (template builder, no network)
+
+PAGES = {"/": "index.html", "/index.html": "index.html",
+         "/thumbnails": "thumbnails.html", "/thumbnails/": "thumbnails.html",
+         "/thumbnails.html": "thumbnails.html"}
 ICONS = {
     "/favicon.ico": "image/x-icon",
     "/favicon.svg": "image/svg+xml",
@@ -104,15 +111,16 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        if self.path in ("/", "/index.html"):
+        path = self.path.split("?", 1)[0]
+        if path in PAGES:
             try:
-                with open(os.path.join(ROOT, "index.html"), "rb") as f:
+                with open(os.path.join(ROOT, PAGES[path]), "rb") as f:
                     self._send(200, f.read(), "text/html; charset=utf-8")
             except Exception as e:
                 self._send(500, json.dumps({"error": str(e)}))
-        elif self.path in ICONS:
-            with open(os.path.join(ROOT, self.path.lstrip("/")), "rb") as f:
-                self._send(200, f.read(), ICONS[self.path])
+        elif path in ICONS:
+            with open(os.path.join(ROOT, path.lstrip("/")), "rb") as f:
+                self._send(200, f.read(), ICONS[path])
         else:
             self._send(200, json.dumps({"status": "ok", "service": "NicheRadar AI (preview)"}))
 
@@ -130,6 +138,21 @@ class Handler(BaseHTTPRequestHandler):
             # simulate 4-6s of backend work so the stepper is visible
             time.sleep(3.6)
             self._send(200, json.dumps(mock_analyze(), ensure_ascii=False))
+        elif self.path.rstrip("/") in ("/api/thumbnails", "/api/thumbnails.py"):
+            length = int(self.headers.get("Content-Length") or 0)
+            try:
+                data = json.loads(self.rfile.read(length) or b"{}")
+            except Exception:
+                data = {}
+            topic = (data.get("topic") or "").strip()
+            if len(topic) < 3:
+                self._send(200, json.dumps({"success": False, "error": "Missing 'topic'."}))
+                return
+            time.sleep(2.5)
+            out = thumbs_api.fallback_payload(topic, (data.get("niche") or "").strip(),
+                                              thumbs_api.parse_lang(data.get("lang")))
+            out["ai"] = "gemini"  # preview: pretend the templates came from Gemini
+            self._send(200, json.dumps(out, ensure_ascii=False))
         else:
             self._send(404, json.dumps({"error": "not found"}))
 

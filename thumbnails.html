@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Thumbnail &amp; Title Lab — AI YouTube Thumbnails 16:9 and A/B Titles</title>
+<link rel="icon" href="/favicon.ico" sizes="48x48" />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<meta name="theme-color" content="#070a11" />
+<meta name="description" content="Thumbnail & Title Lab generates 3 clickable 16:9 YouTube thumbnails (1280x720 PNG) and 6 A/B title variants with CTR scores for your next video." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="preconnect" href="https://image.pollinations.ai" crossorigin />
+<!-- Montserrat 900 (Latin + Cyrillic incl. the Ukrainian letters) for the text drawn on the canvas -->
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800;900&amp;display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #070a11;
+    --bg2: #0c1018;
+    --card: #131926;
+    --card2: #1a2233;
+    --border: #243047;
+    --text: #f4f7fc;
+    --muted: #aeb9c9;
+    --accent: #7c5cff;
+    --accent2: #19c8ff;
+    --good: #36d399;
+    --warn: #ffb020;
+    --grad: linear-gradient(135deg, #7c5cff 0%, #19c8ff 100%);
+    /* darker gradient for elements with white text (WCAG AA >= 4.5:1 on both ends) */
+    --grad-btn: linear-gradient(135deg, #6a46f5 0%, #0b76a8 100%);
+    --radius: 18px;
+    --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; overflow-x: hidden;
+    background:
+      radial-gradient(1100px 600px at 80% -10%, rgba(124, 92, 255, 0.18), transparent 60%),
+      radial-gradient(900px 500px at -10% 10%, rgba(25, 200, 255, 0.12), transparent 55%),
+      var(--bg);
+    color: var(--text);
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+    line-height: 1.5; -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; text-decoration: none; }
+  button, input { font: inherit; }
+  :focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 16px 24px; width: 100%; }
+  .wrap-wide { max-width: 1100px; margin: 0 auto; padding: 0 16px; width: 100%; }
+
+  /* ---------- Header (shared with NicheRadar) ---------- */
+  header {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+    gap: 12px; padding: 18px 16px 10px; max-width: 1100px; margin: 0 auto;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; letter-spacing: -0.02em; }
+  .brand .logo {
+    width: 34px; height: 34px; border-radius: 10px; background: var(--grad);
+    display: grid; place-items: center; font-size: 18px; box-shadow: 0 6px 18px rgba(124, 92, 255, 0.5);
+  }
+  .brand span.grad { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .nav { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .eco {
+    display: flex; flex-direction: column; line-height: 1.15;
+    padding: 6px 12px; border: 1px solid var(--border); border-radius: 12px;
+    background: var(--card); transition: border-color .2s, transform .2s;
+  }
+  .eco:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .eco b { font-size: 13px; }
+  .eco small { color: var(--muted); font-size: 11px; }
+  .tg-btn {
+    display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 12px;
+    background: #1679ab; color: #fff; font-weight: 800; font-size: 13px;
+    box-shadow: 0 6px 18px rgba(22, 121, 171, 0.45); transition: transform .15s, background .15s;
+  }
+  .tg-btn:hover, .tg-btn:focus-visible { background: #12658f; transform: translateY(-1px); }
+  .lang-switch { display: flex; gap: 4px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 4px; }
+  .lang-switch button {
+    border: 0; background: transparent; color: var(--muted);
+    font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 9px; cursor: pointer; transition: all .15s;
+  }
+  .lang-switch button.active { background: var(--grad-btn); color: #fff; }
+
+  /* tool switcher */
+  .tools {
+    display: flex; gap: 8px; max-width: 1100px; margin: 0 auto; padding: 0 16px 6px; flex-wrap: wrap;
+  }
+  .tool {
+    flex: 1 1 200px; min-width: 0; display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-radius: 14px; border: 1px solid var(--border); background: var(--card);
+    color: var(--muted); transition: border-color .2s, color .2s, background .2s;
+  }
+  .tool:hover { border-color: var(--accent2); color: var(--text); }
+  .tool .ti { font-size: 20px; flex: 0 0 auto; }
+  .tool b { display: block; color: var(--text); font-size: 14.5px; line-height: 1.2; }
+  .tool small { display: block; font-size: 12px; line-height: 1.25; }
+  .tool[aria-current="page"] { border-color: var(--accent); background: linear-gradient(180deg, rgba(124, 92, 255, 0.22), rgba(25, 200, 255, 0.08)); color: var(--text); }
+
+  /* ---------- Hero ---------- */
+  .hero { text-align: center; padding: 22px 0 6px; }
+  .hero h1 { font-size: clamp(26px, 6vw, 44px); line-height: 1.12; margin: 0 0 10px; letter-spacing: -0.03em; font-weight: 800; }
+  .hero h1 .grad { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero p.sub { color: var(--muted); font-size: clamp(14px, 3vw, 17px); margin: 0 auto; max-width: 560px; }
+
+  /* ---------- Form ---------- */
+  .form-box {
+    margin: 24px auto 0; background: linear-gradient(180deg, var(--card), var(--bg2));
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .field label, .field .lbl { display: block; font-weight: 700; font-size: 14px; margin-bottom: 6px; }
+  .field .hint { color: var(--muted); font-size: 12.5px; margin-top: 6px; }
+  .text-in {
+    width: 100%; min-width: 0; background: #0a0e16; border: 1px solid var(--border); color: var(--text);
+    border-radius: 13px; padding: 14px 15px; font-size: 16px; outline: none; transition: border-color .2s, box-shadow .2s;
+  }
+  .text-in::placeholder { color: #8793a6; }
+  .text-in:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(124, 92, 255, 0.22); }
+  .examples { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .examples .label { color: var(--muted); font-size: 13px; }
+  .chip {
+    border: 1px solid var(--border); background: var(--card2); color: var(--muted);
+    border-radius: 999px; padding: 6px 12px; font-size: 12.5px; cursor: pointer; transition: all .15s;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
+  }
+  .chip:hover { color: var(--text); border-color: var(--accent2); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  .upload { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .upload input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .btn-sec {
+    display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--card2); color: var(--text);
+    border-radius: 12px; padding: 10px 14px; font-weight: 700; font-size: 14px; transition: border-color .15s, transform .15s;
+  }
+  .btn-sec:hover { border-color: var(--accent2); transform: translateY(-1px); }
+  .upload input[type=file]:focus-visible + label { outline: 2px solid var(--accent2); outline-offset: 2px; }
+  .photo-prev { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .photo-prev img { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; border: 2px solid var(--border); }
+  .photo-prev span { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
+  .link-btn { border: 0; background: none; color: #ff9a9a; cursor: pointer; font-weight: 700; font-size: 13px; padding: 4px; text-decoration: underline; }
+
+  .seg { display: inline-flex; gap: 4px; background: #0a0e16; border: 1px solid var(--border); border-radius: 12px; padding: 4px; }
+  .seg button {
+    border: 0; background: transparent; color: var(--muted); font-weight: 800; font-size: 14px;
+    padding: 8px 16px; border-radius: 9px; cursor: pointer; transition: all .15s;
+  }
+  .seg button[aria-pressed="true"] { background: var(--grad-btn); color: #fff; }
+
+  .btn-main {
+    width: 100%; border: 0; cursor: pointer; color: #fff; font-weight: 800; font-size: 16px;
+    background: var(--grad-btn); border-radius: 13px; padding: 15px 20px; line-height: 1.3;
+    box-shadow: 0 10px 26px rgba(106, 70, 245, 0.45); transition: transform .15s, opacity .2s;
+  }
+  .btn-main:hover { transform: translateY(-1px); }
+  .btn-main:disabled { opacity: .6; cursor: progress; transform: none; }
+
+  /* ---------- Status ---------- */
+  .status { margin-top: 22px; text-align: center; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; }
+  .spinner {
+    width: 40px; height: 40px; margin: 0 auto 16px; border-radius: 50%;
+    border: 4px solid rgba(124, 92, 255, 0.25); border-top-color: var(--accent); animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .steps { list-style: none; padding: 0; margin: 0 auto; max-width: 360px; text-align: left; }
+  .steps li { display: flex; align-items: center; gap: 10px; padding: 7px 0; color: var(--muted); font-size: 15px; }
+  .steps li .dot { width: 20px; text-align: center; font-weight: 800; }
+  .steps li.active { color: var(--text); }
+  .steps li.active .dot { color: var(--accent2); animation: pulse 1s ease-in-out infinite; }
+  .steps li.done, .steps li.done .dot { color: var(--good); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+  /* ---------- Error ---------- */
+  .error-box { margin-top: 22px; background: rgba(255, 90, 90, 0.08); border: 1px solid rgba(255, 90, 90, 0.4); border-radius: var(--radius); padding: 20px; }
+  .error-box h3 { margin: 0 0 8px; color: #ff9a9a; }
+  .error-box p { margin: 0; white-space: pre-wrap; word-break: break-word; }
+  .error-box ol { margin: 10px 0 0; padding-left: 20px; color: var(--muted); }
+  .error-box a { color: var(--accent2); text-decoration: underline; word-break: break-all; }
+
+  /* ---------- Results ---------- */
+  .results { margin-top: 28px; display: flex; flex-direction: column; gap: 30px; }
+  .section-title { font-size: 21px; font-weight: 800; margin: 0 0 4px; }
+  .section-sub { color: var(--muted); font-size: 14px; margin: 0 0 14px; }
+  .ai-notice { border: 1px solid rgba(255, 176, 32, 0.55); background: rgba(255, 176, 32, 0.08); color: #ffd27a; padding: 12px 16px; border-radius: 12px; font-size: 0.95rem; line-height: 1.45; overflow-wrap: anywhere; }
+
+  .thumbs { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
+  .thumb-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+  .canvas-box { position: relative; aspect-ratio: 16 / 9; background: #0b1020; }
+  .canvas-box canvas { display: block; width: 100%; height: 100%; }
+  .variant { position: absolute; top: 8px; left: 8px; background: rgba(7, 10, 17, 0.85); color: #fff; font-weight: 800; font-size: 12px; padding: 3px 9px; border-radius: 999px; }
+  .thumb-body { padding: 14px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+  .angle { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 15.5px; overflow-wrap: anywhere; }
+  .angle .sw { width: 14px; height: 14px; border-radius: 4px; flex: 0 0 auto; border: 1px solid rgba(255, 255, 255, 0.35); }
+  .tip { color: var(--muted); font-size: 13.5px; margin: 0; }
+  .ov-edit label { display: block; font-size: 12px; color: var(--muted); font-weight: 700; margin-bottom: 4px; }
+  .ov-edit input { width: 100%; background: #0a0e16; border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 9px 11px; font-size: 15px; font-weight: 700; }
+  .ov-edit input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.22); }
+  .bg-state { font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; min-height: 18px; }
+  .bg-state .mini { width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(124, 92, 255, 0.3); border-top-color: var(--accent2); animation: spin .8s linear infinite; flex: 0 0 auto; }
+  .bg-state.ok { color: var(--good); }
+  .bg-state.warn { color: #ffd27a; }
+  .thumb-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; }
+  .btn-dl {
+    flex: 1 1 180px; border: 0; cursor: pointer; color: #fff; font-weight: 800; font-size: 14px;
+    background: var(--grad-btn); border-radius: 11px; padding: 11px 12px; line-height: 1.25;
+  }
+  .btn-dl:hover { filter: brightness(1.08); }
+  .thumb-actions .btn-sec { flex: 1 1 120px; justify-content: center; font-size: 13.5px; padding: 10px 12px; }
+
+  .titles { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }
+  .title-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .title-top { display: flex; align-items: flex-start; gap: 10px; }
+  .title-top .ab { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 9px; background: var(--grad-btn); color: #fff; font-weight: 800; font-size: 13px; display: grid; place-items: center; }
+  .title-text { margin: 0; font-size: 16px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; flex: 1; }
+  .title-meta { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+  .trigger { border: 1px solid rgba(124, 92, 255, 0.55); background: rgba(124, 92, 255, 0.14); color: #d9ccff; font-weight: 700; padding: 2px 9px; border-radius: 999px; }
+  .ctr { display: flex; align-items: center; gap: 8px; flex: 1 1 160px; min-width: 140px; }
+  .ctr b { color: var(--good); font-size: 13px; white-space: nowrap; }
+  .bar { flex: 1; height: 8px; border-radius: 99px; background: #0a0e16; border: 1px solid var(--border); overflow: hidden; }
+  .bar i { display: block; height: 100%; background: linear-gradient(90deg, #22c55e, #36d399); border-radius: 99px; }
+  .copy-btn { border: 1px solid var(--border); background: var(--card2); color: var(--text); font-weight: 800; font-size: 13px; border-radius: 10px; padding: 7px 14px; cursor: pointer; }
+  .copy-btn:hover { border-color: var(--accent2); }
+  .copy-btn.done { border-color: var(--good); color: var(--good); }
+
+  /* ecosystem block */
+  .eco-promo {
+    margin: 34px auto 0; max-width: 760px; padding: 18px 20px; border-radius: var(--radius);
+    background: var(--card); border: 1px solid var(--border);
+    color: var(--muted); font-size: 15px; line-height: 1.6; text-align: center; overflow-wrap: anywhere;
+  }
+  .eco-promo a { color: var(--accent2); font-weight: 700; }
+  .eco-promo a:hover, .eco-promo a:focus-visible { text-decoration: underline; }
+
+  .hidden { display: none !important; }
+
+  footer {
+    max-width: 1100px; margin: 40px auto 0; padding: 22px 16px; border-top: 1px solid var(--border);
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; color: var(--muted); font-size: 13px;
+  }
+  footer .links { display: flex; gap: 16px; flex-wrap: wrap; }
+  footer a.link { color: var(--text); border-bottom: 1px dashed var(--border); padding-bottom: 1px; }
+  footer a.link:hover { border-color: var(--accent2); }
+
+  @media (max-width: 560px) {
+    .hero { padding-top: 10px; }
+    .row2 { grid-template-columns: 1fr; }
+    .brand { font-size: 18px; }
+    .eco small, .tool small { display: none; }
+    .eco b { font-size: 12px; }
+    .tool { flex-basis: 130px; padding: 9px 11px; }
+    .tool b { font-size: 13px; }
+    .seg { display: flex; }
+    .seg button { flex: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <a class="brand" href="/">
+    <span class="logo" aria-hidden="true">◎</span>
+    <span>Creator<span class="grad">Studio</span> AI</span>
+  </a>
+  <nav class="nav" aria-label="Ecosystem">
+    <a class="eco" href="https://koshorts.vercel.app" target="_blank" rel="noopener">
+      <b id="eco1">KoShorts AI Studio</b>
+      <small id="eco1desc">Cut Shorts from any YouTube link</small>
+    </a>
+    <a class="eco" href="https://creator-directory-chi.vercel.app" target="_blank" rel="noopener">
+      <b id="eco2">CreatorDirectory</b>
+      <small id="eco2desc">Catalog of 65+ tools for creators</small>
+    </a>
+    <a class="tg-btn" href="https://t.me/remtex_shorts_ai_bot" target="_blank" rel="noopener"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M9.04 15.47 8.9 19.4c.4 0 .58-.17.79-.38l1.9-1.82 3.94 2.88c.72.4 1.24.19 1.43-.67l2.6-12.2c.24-1.08-.39-1.5-1.09-1.24L3.2 11.03c-1.04.4-1.03.98-.18 1.25l3.9 1.21 9.04-5.7c.43-.26.82-.12.5.17"/></svg><span id="tgOpen">Open in Telegram</span></a>
+    <div class="lang-switch" id="langSwitch" role="group" aria-label="Language">
+      <button type="button" data-lang="en" class="active">EN</button>
+      <button type="button" data-lang="ru">RU</button>
+      <button type="button" data-lang="ua">UA</button>
+    </div>
+  </nav>
+</header>
+<nav class="tools" aria-label="Tools">
+  <a class="tool" href="/"><span class="ti" aria-hidden="true">📡</span><span><b>NicheRadar AI</b><small id="toolNicheDesc">Competitors &amp; viral video ideas</small></span></a>
+  <a class="tool" href="/thumbnails" aria-current="page"><span class="ti" aria-hidden="true">🖼️</span><span><b>Thumbnail &amp; Title Lab</b><small id="toolThumbDesc">16:9 thumbnails &amp; A/B titles</small></span></a>
+</nav>
+
+<main>
+<div class="wrap">
+  <section class="hero">
+    <h1><span class="grad">Thumbnail &amp; Title Lab</span><br /><span id="tagline">Clickable thumbnails and A/B titles in one minute</span></h1>
+    <p class="sub" id="subtagline">Describe your video and get 3 ready 1280×720 thumbnails plus 6 title variants with a CTR score.</p>
+  </section>
+
+  <form class="form-box" id="genForm" novalidate>
+    <div class="field">
+      <label for="topicInput" id="topicLabel">Video topic or draft title</label>
+      <input class="text-in" id="topicInput" type="text" maxlength="200" autocomplete="off"
+             placeholder="e.g. I fixed a dead washing machine for $5" />
+      <div class="examples">
+        <span class="label" id="examplesLabel">Try in 1 click:</span>
+        <button type="button" class="chip" data-ex="0"></button>
+        <button type="button" class="chip" data-ex="1"></button>
+        <button type="button" class="chip" data-ex="2"></button>
+      </div>
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label for="nicheInput" id="nicheLabel">Channel niche (optional)</label>
+        <input class="text-in" id="nicheInput" type="text" maxlength="120" autocomplete="off"
+               placeholder="e.g. DIY appliance repair" />
+      </div>
+      <div class="field">
+        <span class="lbl" id="genLangLabel">Language of titles and thumbnail text</span>
+        <div class="seg" id="genLang" role="group" aria-labelledby="genLangLabel">
+          <button type="button" data-gl="en" aria-pressed="true">EN</button>
+          <button type="button" data-gl="ru" aria-pressed="false">RU</button>
+          <button type="button" data-gl="ua" aria-pressed="false">UA</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="field">
+      <span class="lbl" id="photoLabel">Your photo (optional)</span>
+      <div class="upload">
+        <input type="file" id="photoInput" accept="image/*" />
+        <label for="photoInput" class="btn-sec" id="photoBtn">📷 <span id="photoBtnText">Upload photo / selfie</span></label>
+        <div class="photo-prev hidden" id="photoPrev">
+          <img id="photoThumb" alt="" />
+          <span id="photoName"></span>
+          <button type="button" class="link-btn" id="photoRemove">Remove</button>
+        </div>
+      </div>
+      <div class="hint" id="photoHint">It is placed on the side of every thumbnail. The photo stays on your device and is never uploaded.</div>
+    </div>
+
+    <button type="submit" class="btn-main" id="genBtn">Generate 3 Thumbnails &amp; 6 A/B Titles</button>
+  </form>
+
+  <section class="status hidden" id="status" aria-live="polite">
+    <div class="spinner" aria-hidden="true"></div>
+    <ul class="steps" id="steps"></ul>
+  </section>
+
+  <section class="error-box hidden" id="error" role="alert">
+    <h3 id="errorTitle">Something went wrong</h3>
+    <p id="errorMsg"></p>
+    <ol id="errorSteps" class="hidden"></ol>
+  </section>
+</div>
+
+<div class="wrap-wide">
+  <section class="results hidden" id="results">
+    <div class="ai-notice hidden" id="aiNotice" role="status"></div>
+
+    <div>
+      <h2 class="section-title" id="thumbsTitle">3 Thumbnails for Your A/B Test</h2>
+      <p class="section-sub" id="thumbsSub">Each one uses a different psychological angle. Edit the text if you like, then download the PNG.</p>
+      <div class="thumbs" id="thumbs"></div>
+    </div>
+
+    <div>
+      <h2 class="section-title" id="titlesTitle">6 A/B Title Variants</h2>
+      <p class="section-sub" id="titlesSub">Sorted by CTR score. Test the top two against each other in YouTube Studio.</p>
+      <div class="titles" id="titles"></div>
+    </div>
+  </section>
+
+  <p class="eco-promo" id="ecoPromo"></p>
+</div>
+</main>
+
+<footer>
+  <span id="footerNote">Free · No sign-up · Thumbnails are rendered in your browser</span>
+  <div class="links">
+    <a class="link" href="https://koshorts.vercel.app" target="_blank" rel="noopener">KoShorts AI Studio</a>
+    <a class="link" href="https://creator-directory-chi.vercel.app" target="_blank" rel="noopener">CreatorDirectory</a>
+    <a class="link" href="https://t.me/remtex_shorts_ai_bot" target="_blank" rel="noopener">🤖 @remtex_shorts_ai_bot</a>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var LINKS = {
+    ko: "https://koshorts.vercel.app",
+    cd: "https://creator-directory-chi.vercel.app",
+    tg: "https://t.me/remtex_shorts_ai_bot"
+  };
+
+  var I18N = {
+    en: {
+      tagline: "Clickable thumbnails and A/B titles in one minute",
+      subtagline: "Describe your video and get 3 ready 1280×720 thumbnails plus 6 title variants with a CTR score.",
+      toolNicheDesc: "Competitors & viral video ideas",
+      toolThumbDesc: "16:9 thumbnails & A/B titles",
+      topicLabel: "Video topic or draft title",
+      topicPlaceholder: "e.g. I fixed a dead washing machine for $5",
+      examplesLabel: "Try in 1 click:",
+      examples: ["I fixed a dead washing machine for $5", "iPhone 17 vs Galaxy S26: camera test", "How I got 10K subscribers in 90 days"],
+      nicheLabel: "Channel niche (optional)",
+      nichePlaceholder: "e.g. DIY appliance repair",
+      genLangLabel: "Language of titles and thumbnail text",
+      photoLabel: "Your photo (optional)",
+      photoBtn: "Upload photo / selfie",
+      photoChange: "Change photo",
+      photoRemove: "Remove",
+      photoHint: "It is placed on the side of every thumbnail. The photo stays on your device and is never uploaded.",
+      photoBad: "This file could not be read as an image. Try a JPG or PNG.",
+      generate: "Generate 3 Thumbnails & 6 A/B Titles",
+      steps: ["Reading your topic…", "Designing 3 thumbnail concepts…", "Writing 6 A/B titles…"],
+      needTopic: "Enter the topic or a draft title of your video first.",
+      errTitle: "Something went wrong",
+      network: "Network error: ",
+      aiFallback: "Gemini AI is busy right now, so these concepts and titles come from proven templates. Try again in a minute for fully AI-written results.",
+      aiMixed: "Some items did not pass our quality checks and were replaced with proven templates.",
+      thumbsTitle: "3 Thumbnails for Your A/B Test",
+      thumbsSub: "Each one uses a different psychological angle. Edit the text if you like, then download the PNG.",
+      titlesTitle: "6 A/B Title Variants",
+      titlesSub: "Sorted by CTR score. Test the top two against each other in YouTube Studio.",
+      variant: "Variant",
+      overlayLabel: "Text on the thumbnail",
+      download: "Download PNG (1280×720)",
+      newBg: "New background",
+      bgLoading: "Loading the AI background… a gradient is shown meanwhile.",
+      bgOk: "AI background ready.",
+      bgFail: "AI image service did not answer, a gradient background is used. Try “New background”.",
+      bgQueued: "Waiting in line for the AI background…",
+      copy: "Copy",
+      copied: "Copied ✓",
+      chars: "chars",
+      ctr: "CTR",
+      dlFail: "The AI background blocked the download, so the PNG was saved with a gradient background.",
+      footerNote: "Free · No sign-up · Thumbnails are rendered in your browser",
+      tgOpen: "Open in Telegram",
+      eco1desc: "Cut Shorts from any YouTube link",
+      eco2desc: "Catalog of 65+ tools for creators",
+      ecoPromo: "Want to turn long videos into viral Shorts in 2 minutes? Try {ko} or explore 65+ creator tools in {cd}. News and new tools: our Telegram bot {tg}."
+    },
+    ru: {
+      tagline: "Кликабельные обложки и A/B-заголовки за минуту",
+      subtagline: "Опишите видео и получите 3 готовые обложки 1280×720 и 6 вариантов заголовка с оценкой CTR.",
+      toolNicheDesc: "Конкуренты и вирусные идеи",
+      toolThumbDesc: "Обложки 16:9 и A/B-заголовки",
+      topicLabel: "Тема видео или черновик названия",
+      topicPlaceholder: "Например: починил мёртвую стиральную машину за 500 рублей",
+      examplesLabel: "Попробуйте в 1 клик:",
+      examples: ["Починил мёртвую стиральную машину за 500 рублей", "iPhone 17 против Galaxy S26: тест камер", "Как я набрал 10 тысяч подписчиков за 90 дней"],
+      nicheLabel: "Ниша канала (необязательно)",
+      nichePlaceholder: "Например: ремонт бытовой техники",
+      genLangLabel: "Язык заголовков и текста на обложке",
+      photoLabel: "Ваше фото (необязательно)",
+      photoBtn: "Загрузить фото / селфи",
+      photoChange: "Заменить фото",
+      photoRemove: "Убрать",
+      photoHint: "Фото появится сбоку на каждой обложке. Оно остаётся на вашем устройстве и никуда не загружается.",
+      photoBad: "Не удалось прочитать файл как изображение. Попробуйте JPG или PNG.",
+      generate: "Создать 3 обложки и 6 A/B-заголовков",
+      steps: ["Разбираем тему…", "Придумываем 3 концепции обложек…", "Пишем 6 A/B-заголовков…"],
+      needTopic: "Сначала введите тему или черновик названия видео.",
+      errTitle: "Что-то пошло не так",
+      network: "Ошибка сети: ",
+      aiFallback: "ИИ Gemini сейчас перегружен, поэтому концепции и заголовки собраны из проверенных шаблонов. Повторите через минуту, чтобы получить результат от ИИ.",
+      aiMixed: "Часть вариантов не прошла нашу проверку качества и заменена проверенными шаблонами.",
+      thumbsTitle: "3 обложки для A/B-теста",
+      thumbsSub: "У каждой свой психологический приём. При желании поправьте текст и скачайте PNG.",
+      titlesTitle: "6 вариантов заголовка для A/B-теста",
+      titlesSub: "Отсортированы по оценке CTR. Сравните два лучших в YouTube Studio.",
+      variant: "Вариант",
+      overlayLabel: "Текст на обложке",
+      download: "Скачать PNG (1280×720)",
+      newBg: "Новый фон",
+      bgLoading: "Загружаем ИИ-фон… пока показан градиент.",
+      bgOk: "ИИ-фон готов.",
+      bgFail: "Сервис ИИ-картинок не ответил, используется градиентный фон. Нажмите «Новый фон».",
+      bgQueued: "Ждём очереди на ИИ-фон…",
+      copy: "Копировать",
+      copied: "Скопировано ✓",
+      chars: "симв.",
+      ctr: "CTR",
+      dlFail: "ИИ-фон запретил скачивание, поэтому PNG сохранён с градиентным фоном.",
+      footerNote: "Бесплатно · Без регистрации · Обложки создаются в вашем браузере",
+      tgOpen: "Открыть в Telegram",
+      eco1desc: "Нарезка Shorts из любой YouTube-ссылки",
+      eco2desc: "Каталог 65+ инструментов для блогеров",
+      ecoPromo: "Хотите нарезать длинные видео в вирусные Shorts за 2 минуты? Попробуйте {ko} или откройте каталог 65+ сервисов {cd}. Новости и новые инструменты — в нашем Telegram-боте {tg}."
+    },
+    ua: {
+      tagline: "Клікабельні обкладинки та A/B-заголовки за хвилину",
+      subtagline: "Опишіть відео й отримайте 3 готові обкладинки 1280×720 та 6 варіантів заголовка з оцінкою CTR.",
+      toolNicheDesc: "Конкуренти та вірусні ідеї",
+      toolThumbDesc: "Обкладинки 16:9 та A/B-заголовки",
+      topicLabel: "Тема відео або чернетка назви",
+      topicPlaceholder: "Наприклад: полагодив мертву пральну машину за 200 гривень",
+      examplesLabel: "Спробуйте в 1 клік:",
+      examples: ["Полагодив мертву пральну машину за 200 гривень", "iPhone 17 проти Galaxy S26: тест камер", "Як я набрав 10 тисяч підписників за 90 днів"],
+      nicheLabel: "Ніша каналу (необовʼязково)",
+      nichePlaceholder: "Наприклад: ремонт побутової техніки",
+      genLangLabel: "Мова заголовків і тексту на обкладинці",
+      photoLabel: "Ваше фото (необовʼязково)",
+      photoBtn: "Завантажити фото / селфі",
+      photoChange: "Замінити фото",
+      photoRemove: "Прибрати",
+      photoHint: "Фото зʼявиться збоку на кожній обкладинці. Воно залишається на вашому пристрої й нікуди не завантажується.",
+      photoBad: "Не вдалося прочитати файл як зображення. Спробуйте JPG або PNG.",
+      generate: "Створити 3 обкладинки та 6 A/B-заголовків",
+      steps: ["Аналізуємо тему…", "Вигадуємо 3 концепції обкладинок…", "Пишемо 6 A/B-заголовків…"],
+      needTopic: "Спершу введіть тему або чернетку назви відео.",
+      errTitle: "Щось пішло не так",
+      network: "Помилка мережі: ",
+      aiFallback: "ШІ Gemini зараз перевантажений, тому концепції та заголовки зібрано з перевірених шаблонів. Повторіть за хвилину, щоб отримати результат від ШІ.",
+      aiMixed: "Частина варіантів не пройшла нашу перевірку якості й замінена перевіреними шаблонами.",
+      thumbsTitle: "3 обкладинки для A/B-тесту",
+      thumbsSub: "У кожної свій психологічний прийом. За бажанням виправте текст і завантажте PNG.",
+      titlesTitle: "6 варіантів заголовка для A/B-тесту",
+      titlesSub: "Відсортовані за оцінкою CTR. Порівняйте два найкращі в YouTube Studio.",
+      variant: "Варіант",
+      overlayLabel: "Текст на обкладинці",
+      download: "Завантажити PNG (1280×720)",
+      newBg: "Новий фон",
+      bgLoading: "Завантажуємо ШІ-фон… поки що показано градієнт.",
+      bgOk: "ШІ-фон готовий.",
+      bgFail: "Сервіс ШІ-зображень не відповів, використано градієнтний фон. Натисніть «Новий фон».",
+      bgQueued: "Чекаємо черги на ШІ-фон…",
+      copy: "Копіювати",
+      copied: "Скопійовано ✓",
+      chars: "симв.",
+      ctr: "CTR",
+      dlFail: "ШІ-фон заборонив завантаження, тому PNG збережено з градієнтним фоном.",
+      footerNote: "Безкоштовно · Без реєстрації · Обкладинки створюються у вашому браузері",
+      tgOpen: "Відкрити в Telegram",
+      eco1desc: "Нарізка Shorts з будь-якого YouTube-посилання",
+      eco2desc: "Каталог 65+ інструментів для блогерів",
+      ecoPromo: "Хочете нарізати довгі відео у вірусні Shorts за 2 хвилини? Спробуйте {ko} або відкрийте каталог 65+ сервісів {cd}. Новини та нові інструменти — у нашому Telegram-боті {tg}."
+    }
+  };
+
+  // ---------- state ----------
+  var LANG_KEY = "csai_lang";
+  var lang = "en";
+  try { var saved = localStorage.getItem(LANG_KEY); if (I18N[saved]) lang = saved; } catch (e) {}
+  var genLang = lang;
+  var genLangTouched = false;
+
+  var state = {
+    run: 0,            // increments on every generation; stale async work is ignored
+    data: null,        // last API response
+    concepts: [],      // concepts with editable overlay text
+    bg: [],            // loaded background images (or null)
+    bgState: [],       // "queued" | "loading" | "ok" | "fail"
+    photo: null,       // user photo (downscaled canvas)
+    photoName: ""
+  };
+
+  function el(id) { return document.getElementById(id); }
+  function t(key) { var d = I18N[lang] || I18N.en; return (key in d) ? d[key] : I18N.en[key]; }
+  function escapeHtml(s) {
+    return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  // ---------- language ----------
+  function applyLang() {
+    var ids = ["tagline", "subtagline", "toolNicheDesc", "toolThumbDesc", "topicLabel", "examplesLabel",
+      "nicheLabel", "genLangLabel", "photoLabel", "photoHint", "thumbsTitle", "thumbsSub", "titlesTitle",
+      "titlesSub", "footerNote", "tgOpen", "eco1desc", "eco2desc"];
+    for (var i = 0; i < ids.length; i++) el(ids[i]).textContent = t(ids[i]);
+    el("errorTitle").textContent = t("errTitle");
+    el("topicInput").placeholder = t("topicPlaceholder");
+    el("nicheInput").placeholder = t("nichePlaceholder");
+    el("genBtn").textContent = t("generate");
+    el("photoBtnText").textContent = state.photo ? t("photoChange") : t("photoBtn");
+    el("photoRemove").textContent = t("photoRemove");
+    var chips = document.querySelectorAll(".chip[data-ex]");
+    for (var c = 0; c < chips.length; c++) chips[c].textContent = t("examples")[+chips[c].getAttribute("data-ex")];
+    el("ecoPromo").innerHTML = escapeHtml(t("ecoPromo"))
+      .replace("{ko}", '<a href="' + LINKS.ko + '" target="_blank" rel="noopener">KoShorts AI Studio</a>')
+      .replace("{cd}", '<a href="' + LINKS.cd + '" target="_blank" rel="noopener">CreatorDirectory</a>')
+      .replace("{tg}", '<a href="' + LINKS.tg + '" target="_blank" rel="noopener">@remtex_shorts_ai_bot</a>');
+    document.documentElement.lang = lang === "ua" ? "uk" : lang;
+    var btns = document.querySelectorAll("#langSwitch button");
+    for (var b = 0; b < btns.length; b++) {
+      var on = btns[b].getAttribute("data-lang") === lang;
+      btns[b].classList.toggle("active", on);
+      btns[b].setAttribute("aria-pressed", on ? "true" : "false");
+    }
+    if (!genLangTouched) setGenLang(lang, false);
+    if (!el("status").classList.contains("hidden")) renderSteps();
+    if (state.data) { renderNotice(); renderConceptCards(); renderTitles(); }
+  }
+
+  function setGenLang(l, byUser) {
+    genLang = l;
+    if (byUser) genLangTouched = true;
+    var b = document.querySelectorAll("#genLang button");
+    for (var i = 0; i < b.length; i++) b[i].setAttribute("aria-pressed", b[i].getAttribute("data-gl") === l ? "true" : "false");
+  }
+
+  // ---------- stepper ----------
+  var stepTimer = null, curStep = 0;
+  function renderSteps() {
+    var s = t("steps"), html = "";
+    for (var i = 0; i < s.length; i++) {
+      var cls = i < curStep ? "done" : (i === curStep ? "active" : "pending");
+      var dot = i < curStep ? "✓" : (i === curStep ? "●" : "○");
+      html += '<li class="' + cls + '"><span class="dot">' + dot + "</span><span>" + escapeHtml(s[i]) + "</span></li>";
+    }
+    el("steps").innerHTML = html;
+  }
+  function startSteps() {
+    curStep = 0; renderSteps();
+    if (stepTimer) clearInterval(stepTimer);
+    stepTimer = setInterval(function () { if (curStep < t("steps").length - 1) { curStep++; renderSteps(); } }, 2200);
+  }
+  function stopSteps() { if (stepTimer) { clearInterval(stepTimer); stepTimer = null; } }
+
+  function showError(data) {
+    el("status").classList.add("hidden");
+    el("error").classList.remove("hidden");
+    el("errorTitle").textContent = (data.setup && data.setup.title) || t("errTitle");
+    el("errorMsg").textContent = data.error || "Unknown error.";
+    var ol = el("errorSteps");
+    if (data.setup && data.setup.steps && data.setup.steps.length) {
+      ol.innerHTML = data.setup.steps.map(function (s) {
+        return "<li>" + escapeHtml(s).replace(/(https:\/\/[^\s<)]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>') + "</li>";
+      }).join("");
+      ol.classList.remove("hidden");
+    } else {
+      ol.classList.add("hidden");
+    }
+  }
+
+  // ---------- generation ----------
+  function generate() {
+    var topic = el("topicInput").value.trim();
+    if (topic.length < 3) {
+      el("results").classList.add("hidden");
+      showError({ error: t("needTopic") });
+      el("topicInput").focus();
+      return;
+    }
+    state.run++;
+    var run = state.run;
+    el("error").classList.add("hidden");
+    el("results").classList.add("hidden");
+    el("status").classList.remove("hidden");
+    el("genBtn").disabled = true;
+    startSteps();
+
+    fetch("/api/thumbnails", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic: topic, niche: el("nicheInput").value.trim(), lang: genLang })
+    })
+      .then(function (r) {
+        return r.text().then(function (txt) {
+          try { return JSON.parse(txt); } catch (e) { return { success: false, error: "HTTP " + r.status + ": " + txt.slice(0, 300) }; }
+        });
+      })
+      .then(function (data) {
+        if (run !== state.run) return;
+        stopSteps();
+        if (data && data.success) showResults(data); else showError(data || { error: "Empty response." });
+      })
+      .catch(function (e) {
+        if (run !== state.run) return;
+        stopSteps();
+        showError({ error: t("network") + (e && e.message ? e.message : e) });
+      })
+      .finally(function () { if (run === state.run) el("genBtn").disabled = false; });
+  }
+
+  function showResults(data) {
+    state.data = data;
+    state.concepts = data.concepts.map(function (c) {
+      return { angle: c.angle_name, text: c.overlay_text, accent: c.accent_color, prompt: c.image_prompt, tip: c.ctr_tip };
+    });
+    state.bg = [null, null, null];
+    state.bgState = ["queued", "queued", "queued"];
+    el("status").classList.add("hidden");
+    el("results").classList.remove("hidden");
+    renderNotice();
+    renderConceptCards();
+    renderTitles();
+    bgQueue = []; bgBusy = false;
+    for (var i = 0; i < state.concepts.length; i++) queueBackground(i);
+    el("results").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function renderNotice() {
+    var n = el("aiNotice"), ai = state.data && state.data.ai;
+    if (ai === "fallback" || ai === "mixed") {
+      n.textContent = ai === "fallback" ? t("aiFallback") : t("aiMixed");
+      n.classList.remove("hidden");
+    } else {
+      n.classList.add("hidden");
+    }
+  }
+
+  // ---------- concept cards ----------
+  function renderConceptCards() {
+    var box = el("thumbs");
+    var focusedId = document.activeElement && document.activeElement.id;
+    box.innerHTML = state.concepts.map(function (c, i) {
+      return '<article class="thumb-card">' +
+        '<div class="canvas-box"><canvas id="cv' + i + '" width="1280" height="720" role="img" aria-label="' +
+          escapeHtml(t("variant") + " " + (i + 1) + ": " + c.text) + '"></canvas>' +
+          '<span class="variant">' + escapeHtml(t("variant")) + " " + String.fromCharCode(65 + i) + "</span></div>" +
+        '<div class="thumb-body">' +
+          '<div class="angle"><span class="sw" style="background:' + escapeHtml(c.accent) + '"></span>' + escapeHtml(c.angle) + "</div>" +
+          '<p class="tip">' + escapeHtml(c.tip) + "</p>" +
+          '<div class="ov-edit"><label for="ov' + i + '">' + escapeHtml(t("overlayLabel")) + '</label>' +
+            '<input id="ov' + i + '" data-i="' + i + '" type="text" maxlength="40" value="' + escapeHtml(c.text) + '" /></div>' +
+          '<div class="bg-state" id="bgs' + i + '" aria-live="polite"></div>' +
+          '<div class="thumb-actions">' +
+            '<button type="button" class="btn-dl" data-dl="' + i + '">⬇ ' + escapeHtml(t("download")) + "</button>" +
+            '<button type="button" class="btn-sec" data-nb="' + i + '">🎲 ' + escapeHtml(t("newBg")) + "</button>" +
+          "</div>" +
+        "</div></article>";
+    }).join("");
+    for (var i = 0; i < state.concepts.length; i++) { drawThumb(i); renderBgState(i); }
+    if (focusedId && el(focusedId)) el(focusedId).focus();
+  }
+
+  function renderBgState(i) {
+    var s = state.bgState[i], node = el("bgs" + i);
+    if (!node) return;
+    var map = { queued: ["", t("bgQueued"), true], loading: ["", t("bgLoading"), true], ok: ["ok", "✓ " + t("bgOk"), false], fail: ["warn", "⚠ " + t("bgFail"), false] };
+    var m = map[s] || map.queued;
+    node.className = "bg-state " + m[0];
+    node.innerHTML = (m[2] ? '<span class="mini" aria-hidden="true"></span>' : "") + "<span>" + escapeHtml(m[1]) + "</span>";
+  }
+
+  // ---------- AI backgrounds (pollinations.ai, free) ----------
+  // Free anonymous tier is rate limited, so the 3 images load one after another.
+  var BG_TIMEOUT_MS = 45000, BG_RETRY_DELAY_MS = 16000;
+  var bgQueue = [], bgBusy = false;
+
+  function bgUrl(prompt) {
+    var seed = Math.floor(Math.random() * 1e9);
+    return "https://image.pollinations.ai/prompt/" + encodeURIComponent(prompt) +
+      "?width=1280&height=720&nologo=true&private=true&model=flux&seed=" + seed + "&referrer=creator-studio-ai";
+  }
+
+  function queueBackground(i) {
+    state.bgState[i] = "queued"; renderBgState(i);
+    bgQueue.push({ i: i, run: state.run, attempt: 1 });
+    pumpBg();
+  }
+
+  function pumpBg() {
+    if (bgBusy || !bgQueue.length) return;
+    var job = bgQueue.shift();
+    if (job.run !== state.run) { pumpBg(); return; }
+    bgBusy = true;
+    state.bgState[job.i] = "loading"; renderBgState(job.i);
+    var img = new Image(), finished = false;
+    img.crossOrigin = "anonymous";   // needed so the canvas can still be exported as PNG
+    var timer = setTimeout(function () { finish(false); }, BG_TIMEOUT_MS);
+    img.onload = function () { finish(img.naturalWidth > 0); };
+    img.onerror = function () { finish(false); };
+    img.src = bgUrl(state.concepts[job.i].prompt);
+
+    function finish(ok) {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      img.onload = img.onerror = null;
+      if (job.run !== state.run) { bgBusy = false; pumpBg(); return; }
+      if (ok) {
+        state.bg[job.i] = img; state.bgState[job.i] = "ok";
+        drawThumb(job.i); renderBgState(job.i);
+        bgBusy = false; pumpBg();
+      } else if (job.attempt < 2) {
+        // probably rate-limited: wait, then try once more with a new seed
+        job.attempt++;
+        state.bgState[job.i] = "queued"; renderBgState(job.i);
+        setTimeout(function () { bgBusy = false; bgQueue.unshift(job); pumpBg(); }, BG_RETRY_DELAY_MS);
+      } else {
+        state.bgState[job.i] = "fail"; renderBgState(job.i);
+        bgBusy = false; pumpBg();
+      }
+    }
+  }
+
+  // ---------- canvas rendering 1280x720 ----------
+  var W = 1280, H = 720;
+  var FONT = '"Montserrat", "Arial Black", Impact, "Segoe UI", Roboto, Arial, sans-serif';
+
+  function hexToRgb(h) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(h || "");
+    var n = parseInt(m ? m[1] : "facc15", 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  }
+  function rgba(h, a) { var c = hexToRgb(h); return "rgba(" + c.r + "," + c.g + "," + c.b + "," + a + ")"; }
+  function luminance(h) {
+    var c = hexToRgb(h);
+    var f = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+  }
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+  function drawCover(ctx, img, x, y, w, h, focusY) {
+    var iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+    var s = Math.max(w / iw, h / ih), sw = w / s, sh = h / s;
+    var sx = (iw - sw) / 2, sy = Math.max(0, Math.min(ih - sh, (ih - sh) * (focusY == null ? 0.5 : focusY)));
+    ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+  }
+
+  function drawGradientBg(ctx, accent, i) {
+    var g = ctx.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, "#0a0f1f");
+    g.addColorStop(0.55, "#121a33");
+    g.addColorStop(1, rgba(accent, 0.55));
+    ctx.fillStyle = "#0a0f1f"; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    var r = ctx.createRadialGradient(W * 0.8, H * 0.45, 20, W * 0.8, H * 0.45, 560);
+    r.addColorStop(0, rgba(accent, 0.75)); r.addColorStop(1, rgba(accent, 0));
+    ctx.fillStyle = r; ctx.fillRect(0, 0, W, H);
+    // light rays for depth (different angle per variant)
+    ctx.save();
+    ctx.translate(W * 0.8, H * 0.45);
+    ctx.rotate(-0.35 + i * 0.3);
+    ctx.fillStyle = "rgba(255,255,255,0.05)";
+    for (var k = 0; k < 7; k++) { ctx.rotate(Math.PI / 7); ctx.fillRect(0, -18, 1200, 36); }
+    ctx.restore();
+  }
+
+  // best split of the words into lines (<=3, or <=4 for long text) -> largest font that fits
+  function layoutText(ctx, words, maxW, maxH) {
+    var n = words.length, best = null, maxLines = n <= 4 ? 3 : 4;
+    for (var mask = 0; mask < (1 << Math.max(0, n - 1)); mask++) {
+      var lines = [], cur = [words[0]];
+      for (var k = 1; k < n; k++) {
+        if (mask & (1 << (k - 1))) { lines.push(cur.join(" ")); cur = [words[k]]; } else cur.push(words[k]);
+      }
+      lines.push(cur.join(" "));
+      if (lines.length > maxLines) continue;
+      ctx.font = "900 100px " + FONT;
+      var wMax = 0;
+      for (var j = 0; j < lines.length; j++) wMax = Math.max(wMax, ctx.measureText(lines[j]).width);
+      var size = Math.min(190, 100 * maxW / (wMax + 1), maxH / (lines.length * 1.08));
+      if (!best || size > best.size + 2 || (Math.abs(size - best.size) <= 2 && lines.length < best.lines.length)) {
+        best = { size: size, lines: lines };
+      }
+    }
+    best.size = Math.max(40, Math.floor(best.size));
+    return best;
+  }
+
+  function drawThumb(i) {
+    var cv = el("cv" + i);
+    if (!cv) return;
+    var ctx = cv.getContext("2d");
+    var c = state.concepts[i], accent = c.accent, bg = state.bg[i], photo = state.photo;
+    ctx.save();
+    ctx.clearRect(0, 0, W, H);
+
+    // 1) background
+    if (bg) drawCover(ctx, bg, 0, 0, W, H, 0.5); else drawGradientBg(ctx, accent, i);
+
+    // 2) vignette: dark left side for the headline + soft edges
+    var v = ctx.createLinearGradient(0, 0, W * 0.68, 0);
+    v.addColorStop(0, "rgba(5,7,14,0.86)"); v.addColorStop(0.6, "rgba(5,7,14,0.45)"); v.addColorStop(1, "rgba(5,7,14,0)");
+    ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+    var e = ctx.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, W * 0.75);
+    e.addColorStop(0, "rgba(0,0,0,0)"); e.addColorStop(1, "rgba(0,0,0,0.55)");
+    ctx.fillStyle = e; ctx.fillRect(0, 0, W, H);
+
+    // 3) user portrait on the right
+    var textMaxW = 700;
+    if (photo) {
+      var pw = 430, ph = 600, px = W - pw - 56, py = (H - ph) / 2 + 10;
+      ctx.save();
+      var glow = ctx.createRadialGradient(px + pw / 2, py + ph / 2, 60, px + pw / 2, py + ph / 2, 420);
+      glow.addColorStop(0, rgba(accent, 0.55)); glow.addColorStop(1, rgba(accent, 0));
+      ctx.fillStyle = glow; ctx.fillRect(px - 200, py - 120, pw + 400, ph + 240);
+      ctx.shadowColor = "rgba(0,0,0,0.65)"; ctx.shadowBlur = 50; ctx.shadowOffsetY = 18;
+      roundRect(ctx, px, py, pw, ph, 40); ctx.fillStyle = "#0b1020"; ctx.fill();
+      ctx.restore();
+      ctx.save();
+      roundRect(ctx, px, py, pw, ph, 40); ctx.clip();
+      drawCover(ctx, photo, px, py, pw, ph, 0.3);
+      var fade = ctx.createLinearGradient(0, py + ph * 0.7, 0, py + ph);
+      fade.addColorStop(0, "rgba(0,0,0,0)"); fade.addColorStop(1, "rgba(0,0,0,0.35)");
+      ctx.fillStyle = fade; ctx.fillRect(px, py, pw, ph);
+      ctx.restore();
+      ctx.save();
+      roundRect(ctx, px, py, pw, ph, 40);
+      ctx.lineWidth = 12; ctx.strokeStyle = accent; ctx.stroke();
+      roundRect(ctx, px + 9, py + 9, pw - 18, ph - 18, 32);
+      ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.stroke();
+      ctx.restore();
+      textMaxW = px - 64 - 24;
+    }
+
+    // 4) headline: big, bold, outlined; last line on an accent plate
+    var locale = state.data && state.data.lang === "ua" ? "uk" : (state.data && state.data.lang) || "en";
+    var text = (c.text || "").trim().toLocaleUpperCase(locale);
+    var words = text.split(/\s+/).filter(Boolean).slice(0, 10);
+    if (words.length) {
+      var L = layoutText(ctx, words, textMaxW - 40, 540);
+      var size = L.size, lh = size * 1.08, x0 = 64;
+      var blockH = L.lines.length * lh;
+      var y = (H - blockH) / 2 + size * 0.86;
+      var plateText = luminance(accent) > 0.32 ? "#0b0f1a" : "#ffffff";
+      ctx.font = "900 " + size + "px " + FONT;
+      ctx.textBaseline = "alphabetic";
+      ctx.lineJoin = "round"; ctx.miterLimit = 2;
+      for (var j = 0; j < L.lines.length; j++) {
+        var line = L.lines[j], last = j === L.lines.length - 1;
+        var w = ctx.measureText(line).width;
+        if (last) {
+          var padX = size * 0.22, padY = size * 0.12;
+          ctx.save();
+          ctx.translate(x0 + w / 2, y - size * 0.36);
+          ctx.rotate(-0.025);
+          ctx.shadowColor = "rgba(0,0,0,0.55)"; ctx.shadowBlur = 30; ctx.shadowOffsetY = 10;
+          roundRect(ctx, -w / 2 - padX, -size * 0.5 - padY, w + padX * 2, size + padY * 2 - size * 0.02, size * 0.14);
+          ctx.fillStyle = accent; ctx.fill();
+          ctx.restore();
+          ctx.save();
+          ctx.translate(x0 + w / 2, y - size * 0.36); ctx.rotate(-0.025); ctx.translate(-(x0 + w / 2), -(y - size * 0.36));
+          ctx.fillStyle = plateText;
+          ctx.fillText(line, x0, y);
+          ctx.restore();
+        } else {
+          ctx.save();
+          ctx.shadowColor = "rgba(0,0,0,0.6)"; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8;
+          ctx.lineWidth = Math.max(10, size * 0.14); ctx.strokeStyle = "#05070e";
+          ctx.strokeText(line, x0, y);
+          ctx.restore();
+          ctx.fillStyle = "#ffffff";
+          ctx.fillText(line, x0, y);
+        }
+        y += lh;
+      }
+    }
+
+    // 5) small accent bar for a finished look
+    ctx.fillStyle = accent;
+    ctx.fillRect(0, H - 14, W, 14);
+    ctx.restore();
+  }
+
+  function redrawAll() { for (var i = 0; i < state.concepts.length; i++) drawThumb(i); }
+
+  // ---------- download ----------
+  function slug(s) {
+    return (s || "thumbnail").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "thumbnail";
+  }
+  function saveBlob(blob, name) {
+    var url = URL.createObjectURL(blob), a = document.createElement("a");
+    a.href = url; a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 1500);
+  }
+  function download(i) {
+    var cv = el("cv" + i), name = "thumbnail-" + String.fromCharCode(97 + i) + "-" + slug(state.concepts[i].text) + "-1280x720.png";
+    try {
+      cv.toBlob(function (blob) {
+        if (blob) saveBlob(blob, name); else fallbackDownload(i, name);
+      }, "image/png");
+    } catch (e) {
+      fallbackDownload(i, name);   // canvas tainted by the external image
+    }
+  }
+  function fallbackDownload(i, name) {
+    state.bg[i] = null; state.bgState[i] = "fail";
+    drawThumb(i); renderBgState(i);
+    alert(t("dlFail"));
+    el("cv" + i).toBlob(function (blob) { if (blob) saveBlob(blob, name); }, "image/png");
+  }
+
+  // ---------- titles ----------
+  function renderTitles() {
+    var titles = (state.data && state.data.titles) || [];
+    el("titles").innerHTML = titles.map(function (x, i) {
+      var pct = Math.max(5, Math.min(100, Math.round((x.ctr_score - 75) / 25 * 100)));
+      return '<article class="title-card">' +
+        '<div class="title-top"><span class="ab" aria-hidden="true">' + (i + 1) + "</span>" +
+          '<p class="title-text" id="tt' + i + '">' + escapeHtml(x.title) + "</p></div>" +
+        '<div class="title-meta">' +
+          '<span class="ctr" aria-label="' + escapeHtml(t("ctr") + " " + x.ctr_score + "/100") + '"><b>' + escapeHtml(t("ctr")) + " " + x.ctr_score + '</b><span class="bar" aria-hidden="true"><i style="width:' + pct + '%"></i></span></span>' +
+          '<span class="trigger">' + escapeHtml(x.trigger) + "</span>" +
+          "<span>" + x.title.length + " " + escapeHtml(t("chars")) + "</span>" +
+          '<button type="button" class="copy-btn" data-copy="' + i + '">' + escapeHtml(t("copy")) + "</button>" +
+        "</div></article>";
+    }).join("");
+  }
+
+  function copyText(text, btn) {
+    function ok() {
+      btn.textContent = t("copied"); btn.classList.add("done");
+      setTimeout(function () { btn.textContent = t("copy"); btn.classList.remove("done"); }, 1600);
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(ok, function () { legacyCopy(text) && ok(); });
+    } else if (legacyCopy(text)) ok();
+  }
+  function legacyCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    var done = false;
+    try { done = document.execCommand("copy"); } catch (e) {}
+    ta.remove();
+    return done;
+  }
+
+  // ---------- photo ----------
+  function loadPhoto(file) {
+    if (!file) return;
+    var url = URL.createObjectURL(file), img = new Image();
+    img.onload = function () {
+      // downscale once (keeps memory low on phones); EXIF rotation is applied by the browser
+      var max = 1100, s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      var c = document.createElement("canvas");
+      c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      state.photo = c; state.photoName = file.name || "photo";
+      el("photoThumb").src = c.toDataURL("image/jpeg", 0.8);
+      el("photoName").textContent = state.photoName;
+      el("photoPrev").classList.remove("hidden");
+      el("photoBtnText").textContent = t("photoChange");
+      URL.revokeObjectURL(url);
+      redrawAll();
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); alert(t("photoBad")); };
+    img.src = url;
+  }
+  function removePhoto() {
+    state.photo = null; state.photoName = "";
+    el("photoInput").value = "";
+    el("photoPrev").classList.add("hidden");
+    el("photoBtnText").textContent = t("photoBtn");
+    redrawAll();
+  }
+
+  // ---------- events ----------
+  el("genForm").addEventListener("submit", function (e) { e.preventDefault(); generate(); });
+  var chips = document.querySelectorAll(".chip[data-ex]");
+  for (var i = 0; i < chips.length; i++) {
+    chips[i].addEventListener("click", function () {
+      el("topicInput").value = t("examples")[+this.getAttribute("data-ex")];
+      generate();
+    });
+  }
+  var gl = document.querySelectorAll("#genLang button");
+  for (var g = 0; g < gl.length; g++) {
+    gl[g].addEventListener("click", function () { setGenLang(this.getAttribute("data-gl"), true); });
+  }
+  var lb = document.querySelectorAll("#langSwitch button");
+  for (var j = 0; j < lb.length; j++) {
+    lb[j].addEventListener("click", function () {
+      lang = this.getAttribute("data-lang");
+      try { localStorage.setItem(LANG_KEY, lang); } catch (e) {}
+      applyLang();
+    });
+  }
+  el("photoInput").addEventListener("change", function () { loadPhoto(this.files && this.files[0]); });
+  el("photoRemove").addEventListener("click", removePhoto);
+
+  el("thumbs").addEventListener("input", function (e) {
+    var i = e.target.getAttribute && e.target.getAttribute("data-i");
+    if (i == null) return;
+    state.concepts[+i].text = e.target.value;
+    drawThumb(+i);
+  });
+  el("thumbs").addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("button");
+    if (!b) return;
+    if (b.hasAttribute("data-dl")) download(+b.getAttribute("data-dl"));
+    if (b.hasAttribute("data-nb")) {
+      var k = +b.getAttribute("data-nb");
+      state.bg[k] = null; drawThumb(k); queueBackground(k);
+    }
+  });
+  el("titles").addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("button[data-copy]");
+    if (!b) return;
+    var x = state.data.titles[+b.getAttribute("data-copy")];
+    if (x) copyText(x.title, b);
+  });
+
+  // canvas font: redraw once Montserrat (with Cyrillic glyphs) is loaded
+  if (document.fonts && document.fonts.load) {
+    Promise.all([
+      document.fonts.load('900 100px "Montserrat"', "ABC"),
+      document.fonts.load('900 100px "Montserrat"', "\u0410\u0411\u0412\u0407\u0404\u0490\u0406")
+    ]).then(function () { redrawAll(); }, function () {});
+  }
+
+  applyLang();
+})();
+</script>
+</body>
+</html>
