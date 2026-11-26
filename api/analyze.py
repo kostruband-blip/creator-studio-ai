@@ -326,7 +326,7 @@ def determine_niche(channel, videos):
         + "\n"
     )
     try:
-        raw = call_gemini(prompt)
+        raw = call_gemini(prompt, budget=40)  # leave time for the ideas step
         data = extract_json(raw)
     except GeminiFail as e:
         if e.message == "NO_KEYS":
@@ -335,9 +335,14 @@ def determine_niche(channel, videos):
                 "configured in Vercel. Add it in Project Settings -> "
                 "Environment Variables, then redeploy."
             )
+        if e.kind in ("quota", "transient", "bad_response", "model"):
+            # Gemini overloaded: continue with a data-based niche.
+            niche, queries = heuristic_niche(channel, videos)
+            return niche, queries, "fallback"
         raise _gemini_step_error("niche analysis", e)
-    except Exception as e:
-        raise RuntimeError("Gemini niche analysis failed: %s" % e)
+    except Exception:
+        niche, queries = heuristic_niche(channel, videos)
+        return niche, queries, "fallback"
 
     niche = str(data.get("niche") or "").strip() or (channel.get("title") or "Creator")
     queries = data.get("queries") or []
@@ -346,7 +351,79 @@ def determine_niche(channel, videos):
     queries = [str(q).strip() for q in queries if str(q).strip()][:4]
     while len(queries) < 4:
         queries.append(channel.get("title") or "YouTube")
+    return niche, queries, "gemini"
+
+
+# Small multilingual stop-word list for the no-AI fallback.
+_STOP = set("""
+the and for with you your this that how what why from are was were new best top
+video videos official full part episode ep vs my our all can get not but just will
+its it's into out about more most when where who has have had one two first last
+как что это для мой моя мои все всё или при над без про так его она они уже там
+тут вот когда почему где кто чем лучший новый часть выпуск видео очень самый
+як що це для мій моя мої усі або при над без про так його вона вони вже там тут
+ось коли чому хто чим найкращий новий частина випуск відео дуже
+""".split())
+
+
+def heuristic_niche(channel, videos):
+    """Niche + 4 search queries from title keywords (used when Gemini is busy)."""
+    texts = [v.get("title") or "" for v in videos]
+    counts = {}
+    for t in texts:
+        seen = set()
+        for w in re.findall(r"[^\W\d_][\w'-]{2,}", t.lower(), re.UNICODE):
+            w = w.strip("'-")
+            if len(w) < 3 or w in _STOP or w in seen:
+                continue
+            seen.add(w)
+            counts[w] = counts.get(w, 0) + 1
+    top = [w for w, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))][:6]
+    title = (channel.get("title") or "").strip()
+    niche = " · ".join(top[:3]) if top else (title or "YouTube")
+    queries = []
+    if len(top) >= 2:
+        queries.append(top[0] + " " + top[1])
+    if top:
+        queries.append(top[0])
+    if len(top) >= 3:
+        queries.append(top[1] + " " + top[2])
+    best = max(videos, key=lambda v: v.get("views", 0)) if videos else None
+    if best and best.get("title"):
+        queries.append(best["title"][:80])
+    for w in top[2:]:
+        queries.append(w)
+    queries = list(dict.fromkeys(q for q in queries if q.strip()))[:4]
+    while len(queries) < 4:
+        queries.append(title or "YouTube")
     return niche, queries
+
+
+def fallback_ideas(competitors):
+    """Competitors' viral videos as idea seeds (used when Gemini is busy)."""
+    ideas, seen = [], set()
+    pools = [
+        [(c, o) for c in competitors for o in (c.get("outliers") or [])],
+        [(c, c.get("bestVideo")) for c in competitors if c.get("bestVideo")],
+        [(c, v) for c in competitors for v in (c.get("topVideos") or [])],
+    ]
+    for pool in pools:
+        for c, v in sorted(pool, key=lambda cv: -(cv[1].get("views") or 0)):
+            title = (v.get("title") or "").strip()
+            if not title or title.lower() in seen:
+                continue
+            seen.add(title.lower())
+            ideas.append({
+                "title": title,
+                "topic": "",
+                "url": v.get("url"),
+                "views": v.get("views", 0),
+                "channel": c.get("title", ""),
+                "source": "competitor",
+            })
+            if len(ideas) >= 10:
+                return ideas
+    return ideas
 
 
 # ---------------------------------------------------------------------------
@@ -450,6 +527,7 @@ def analyze_competitor(comp):
         "views": best["views"],
     }
     comp["outliers"] = outliers
+    comp["topVideos"] = sorted(videos, key=lambda v: v["views"], reverse=True)[:3]
     return comp
 
 
@@ -493,9 +571,11 @@ def generate_ideas(niche, lang_hint, competitors):
                 "GEMINI_API_KEY is not configured in Vercel. Add it in "
                 "Project Settings -> Environment Variables, then redeploy."
             )
+        if e.kind in ("quota", "transient", "bad_response", "model"):
+            return fallback_ideas(competitors), "fallback"
         raise _gemini_step_error("idea generation", e)
-    except Exception as e:
-        raise RuntimeError("Gemini idea generation failed: %s" % e)
+    except Exception:
+        return fallback_ideas(competitors), "fallback"
 
     ideas = data.get("ideas") or []
     if not isinstance(ideas, list):
@@ -513,7 +593,9 @@ def generate_ideas(niche, lang_hint, competitors):
             )
             normalized.append({"title": str(title), "topic": str(topic)})
     normalized = [x for x in normalized if x["title"].strip()]
-    return normalized[:10]
+    if not normalized:
+        return fallback_ideas(competitors), "fallback"
+    return normalized[:10], "gemini"
 
 
 def format(n):
@@ -595,7 +677,7 @@ def analyze(url):
         channel = get_channel(channel_id)
         videos = get_videos_from_playlist(channel.get("uploads"), 10)
 
-        niche, queries = determine_niche(channel, videos)
+        niche, queries, niche_src = determine_niche(channel, videos)
 
         candidates = find_candidates(queries, channel_id, 12)
         competitors = enrich_channels(candidates)
@@ -607,7 +689,7 @@ def analyze(url):
         competitors = [analyze_competitor(c) for c in competitors]
 
         lang_hint = channel.get("language") or "the same language as the channel content"
-        ideas = generate_ideas(niche, lang_hint, competitors)
+        ideas, ideas_src = generate_ideas(niche, lang_hint, competitors)
 
         return {
             "success": True,
@@ -633,6 +715,8 @@ def analyze(url):
                 for c in competitors
             ],
             "ideas": ideas,
+            # "gemini" = AI result, "fallback" = YouTube-data result (Gemini was busy)
+            "ai": {"niche": niche_src, "ideas": ideas_src},
             "language": channel.get("language") or "",
         }
     except RuntimeError as e:

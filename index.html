@@ -173,6 +173,10 @@
 
   /* niche card */
   .niche-card { display: flex; gap: 16px; align-items: center; }
+  .ai-notice { border: 1px solid rgba(255, 176, 32, 0.55); background: rgba(255, 176, 32, 0.08); color: #ffd27a; padding: 12px 16px; border-radius: 12px; font-size: 0.95rem; line-height: 1.45; overflow-wrap: anywhere; }
+  .idea-src { margin-top: 6px; font-size: 0.88rem; color: var(--muted); overflow-wrap: anywhere; }
+  .idea-src a { color: var(--accent2); text-decoration: none; }
+  .idea-src a:hover, .idea-src a:focus-visible { text-decoration: underline; }
   .niche-card img.avatar { width: 64px; height: 64px; border-radius: 14px; object-fit: cover; border: 2px solid var(--border); flex: 0 0 auto; }
   .niche-card .meta { min-width: 0; }
   .niche-card h3 { margin: 0 0 4px; font-size: 18px; word-break: break-word; }
@@ -318,6 +322,7 @@
   </section>
 
   <section class="results hidden" id="results">
+    <div class="ai-notice hidden" id="aiNotice" role="status"></div>
     <!-- niche -->
     <div>
       <h2 class="section-title" id="nicheTitle">Your Channel Niche</h2>
@@ -389,6 +394,7 @@
       footerNote: "Free analysis · Full report in our Telegram bot",
       errTitle: "Setup needed",
       errGeneric: "Something went wrong",
+      aiFallback: "Gemini AI was overloaded, so this report is built from YouTube data only: the niche comes from your video titles and the ideas are viral videos of your competitors. Try again in a few minutes for AI-written ideas.",
       eco1: "KoShorts AI Studio",
       eco1desc: "Cut Shorts from any YouTube link",
       eco2: "CreatorDirectory",
@@ -414,6 +420,7 @@
       footerNote: "Бесплатный анализ · Полный отчёт в нашем Telegram-боте",
       errTitle: "Требуется настройка",
       errGeneric: "Что-то пошло не так",
+      aiFallback: "ИИ Gemini был перегружен, поэтому отчёт собран только по данным YouTube: ниша определена по названиям ваших видео, а идеи — это вирусные видео конкурентов. Попробуйте ещё раз через несколько минут, чтобы получить идеи от ИИ.",
       eco1: "KoShorts AI Studio",
       eco1desc: "Нарезка Shorts из любой YouTube-ссылки",
       eco2: "CreatorDirectory",
@@ -439,6 +446,7 @@
       footerNote: "Безкоштовний аналіз · Повний звіт у нашому Telegram-боті",
       errTitle: "Потрібне налаштування",
       errGeneric: "Щось пішло не так",
+      aiFallback: "ШІ Gemini був перевантажений, тому звіт зібрано лише за даними YouTube: нішу визначено за назвами ваших відео, а ідеї — це вірусні відео конкурентів. Спробуйте ще раз за кілька хвилин, щоб отримати ідеї від ШІ.",
       eco1: "KoShorts AI Studio",
       eco1desc: "Нарізка Shorts з будь-якого посилання YouTube",
       eco2: "CreatorDirectory",
@@ -471,6 +479,7 @@
 
   // ---------- Language application ----------
   function applyLang() {
+    el("aiNotice").textContent = t("aiFallback");
     el("tagline").textContent = t("tagline");
     el("subtagline").textContent = t("subtagline");
     el("urlInput").placeholder = t("inputPlaceholder");
@@ -591,6 +600,12 @@
     html += '<div class="num">' + (idx + 1) + "</div>";
     html += "<div><h4>" + escapeHtml(idea.title) + "</h4>";
     if (idea.topic) html += "<p>" + escapeHtml(idea.topic) + "</p>";
+    if (idea.views || idea.channel) {
+      var src = "🔥 " + fmt(idea.views || 0) + " " + escapeHtml(t("views")) + (idea.channel ? " · " + escapeHtml(idea.channel) : "");
+      html += '<p class="idea-src">' + (idea.url
+        ? '<a href="' + escapeHtml(idea.url) + '" target="_blank" rel="noopener">' + src + "</a>"
+        : src) + "</p>";
+    }
     html += "</div></div>";
     return html;
   }
@@ -600,6 +615,12 @@
     var ch = data.channel || {};
     var competitors = data.competitors || [];
     var ideas = data.ideas || [];
+
+    // notice when Gemini was busy and YouTube-data fallbacks were used
+    var ai = data.ai || {};
+    var degraded = ai.niche === "fallback" || ai.ideas === "fallback";
+    el("aiNotice").textContent = t("aiFallback");
+    el("aiNotice").classList.toggle("hidden", !degraded);
 
     // niche card
     var nicheHtml = "";
