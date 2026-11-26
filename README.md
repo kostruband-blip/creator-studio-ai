@@ -148,8 +148,12 @@ Missing `GEMINI_API_KEY` → `{"success": false, "error": "...", "setup": {"titl
    title, channel, description, tags and **chapters** (timecodes parsed from the description)
    via the YouTube Data API (`YOUTUBE_API_KEY`, oEmbed fallback for the title), plus
    **subtitles** (InnerTube player → watch page caption tracks). YouTube often blocks
-   subtitles for datacenter IPs — then the pack is built from description + chapters + your
-   text and the response contains the warning `subtitles_unavailable` (shown in the UI).
+   subtitles for datacenter IPs (`LOGIN_REQUIRED`). Then **Gemini watches the public video
+   itself**: the YouTube URL is sent as `fileData` (low media resolution, 0.2 fps, first
+   20 minutes; Google fetches the video on its side, so the IP block does not matter;
+   free tier: up to 8 hours of YouTube video per day) and `sources.video_ai` is `"watched"`.
+   Only if that also fails is the pack built from description + chapters + your text, with
+   the warning `subtitles_unavailable` (shown in the UI).
 3. Gemini (via `api/_gemini.py`) returns strict JSON, re-validated on the server:
    - `telegram_post` — 800–1300 chars: hook, 3–5 bullets, takeaway, CTA (the video link is inserted);
    - `seo_article` — H1, meta description (≤160), intro, 3–4 H2 sections, conclusion,
@@ -167,7 +171,7 @@ Missing `GEMINI_API_KEY` → `{"success": false, "error": "...", "setup": {"titl
 ```
 
 Response: `{"success": true, "lang": "en", "video": {id,url,title,channel,thumbnail}|null,
-"sources": {api, oembed, description, chapters, subtitles: "manual|auto|blocked|none", notes},
+"sources": {api, oembed, description, chapters, subtitles: "manual|auto|blocked|none", notes, video_ai?: "watched|failed"},
 "warnings": [...], "telegram_post": "...", "seo_article": {h1, meta_description, intro, sections:[{h2,body}],
 conclusion_h2, conclusion, markdown, html}, "social_posts": [5 × {angle, text}], "stats": {...}}`.
 `GET /api/repurpose?probe=<youtube url>` is a diagnostic (metadata + subtitle availability, no Gemini call).

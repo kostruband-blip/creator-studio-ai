@@ -12,6 +12,10 @@ POST /api/repurpose   {"url": "https://youtu.be/...", "notes": "...", "lang": "a
      these requests from cloud IPs (Vercel) — then we simply continue with the
      title, description, chapters and the user's `notes`.
    Only `notes` without a link also works.
+   When there are no subtitles, Gemini WATCHES the public video itself (YouTube URL as
+   fileData, low media resolution, first VIDEO_WATCH_LIMIT seconds) — Google fetches the
+   video on its side, so the cloud-IP block does not matter. If that fails, the pack is
+   written from the text sources only.
 2. Gemini (shared carousel in api/_gemini.py) writes the content pack as strict JSON:
    telegram_post, seo_article {h1, meta_description, intro, sections[3-4], conclusion},
    social_posts[5] (insight, steps, mistake, tip, question). Everything is validated here.
@@ -48,8 +52,12 @@ YT_BASE = "https://www.googleapis.com/youtube/v3/"
 UA_HEADER = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
              "(KHTML, like Gecko) Chrome/131.0 Safari/537.36")
 
-REQUEST_BUDGET = 85     # whole request; vercel.json maxDuration for this function: 90
-GEMINI_BUDGET = 62      # first Gemini call
+REQUEST_BUDGET = 140    # whole request; vercel.json maxDuration for this function: 150
+GEMINI_BUDGET = 62      # text-only Gemini call
+VIDEO_BUDGET = 80       # Gemini watching the video (all attempts)
+VIDEO_TRY_TIMEOUT = 60  # one model watching the video
+VIDEO_WATCH_LIMIT = 1200  # seconds of video Gemini watches (longer videos are clipped)
+VIDEO_FPS = 0.2         # frames per second sampled from the video (speech is what matters)
 FETCH_TIMEOUT = 7       # each YouTube request
 TRANSCRIPT_LIMIT = 14000
 DESCRIPTION_LIMIT = 5000
@@ -162,7 +170,10 @@ def fetch_meta_api(video_id):
     if not items:
         return None
     sn = items[0].get("snippet") or {}
+    cd = items[0].get("contentDetails") or {}
     return {
+        "duration": iso_duration(cd.get("duration") or ""),
+        "live": (sn.get("liveBroadcastContent") or "none") != "none",
         "title": sn.get("title") or "",
         "channel": sn.get("channelTitle") or "",
         "description": sn.get("description") or "",
@@ -171,12 +182,21 @@ def fetch_meta_api(video_id):
     }
 
 
+def iso_duration(value):
+    """'PT1H2M3S' -> 3723 (0 when unknown)."""
+    m = re.match(r"^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$", value or "")
+    if not m:
+        return 0
+    d, h, mi, se = (int(x or 0) for x in m.groups())
+    return d * 86400 + h * 3600 + mi * 60 + se
+
+
 def fetch_meta_oembed(video_id):
     url = "https://www.youtube.com/oembed?format=json&url=" + urllib.parse.quote(
         "https://www.youtube.com/watch?v=" + video_id, safe="")
     data = json.loads(http_get(url))
     return {"title": data.get("title") or "", "channel": data.get("author_name") or "",
-            "description": "", "tags": [], "language": ""}
+            "description": "", "tags": [], "language": "", "duration": 0, "live": False}
 
 
 # ---------------------------------------------------------------------------
@@ -312,7 +332,8 @@ def collect(url, notes):
         except Exception:
             meta = None
     if meta is None:
-        meta = {"title": "", "channel": "", "description": "", "tags": [], "language": ""}
+        meta = {"title": "", "channel": "", "description": "", "tags": [], "language": "",
+                "duration": 0, "live": False}
         out["warnings"].append("metadata_unavailable")
 
     out["meta"] = meta
@@ -361,7 +382,7 @@ def lang_name(code):
 # ---------------------------------------------------------------------------
 
 
-def build_prompt(src, notes, lang):
+def build_prompt(src, notes, lang, watch=False):
     meta = src.get("meta") or {}
     tr = src.get("transcript") or {}
     ln = lang_name(lang)
@@ -387,7 +408,17 @@ def build_prompt(src, notes, lang):
     if notes:
         parts.append("AUTHOR NOTES / TRANSCRIPT / KEY POINTS:\n" + notes[:NOTES_LIMIT])
     source = "\n\n".join(parts)
-    return (
+    watch_note = ""
+    if watch:
+        dur = int(meta.get("duration") or 0)
+        watch_note = (
+            "THE VIDEO ITSELF IS ATTACHED. Watch and listen to it: what is said and shown in the video is "
+            "the PRIMARY source — use its real explanations, steps, tips and examples. The title, "
+            "description and notes below are only context.\n")
+        if dur > VIDEO_WATCH_LIMIT:
+            watch_note += ("Only the first %d minutes of the %d-minute video are attached; use the chapters "
+                           "and description for the rest.\n" % (VIDEO_WATCH_LIMIT // 60, dur // 60))
+    return watch_note + (
         "You are an expert content marketer. Repurpose the YouTube video described below into a "
         "ready-to-publish content pack in %(ln)s.\n"
         "Use ONLY facts, steps and ideas present in the source. If the source is thin, stay general "
@@ -581,24 +612,65 @@ def generate(url, notes, lang_req):
 
     meta = src.get("meta") or {}
     substance = len(meta.get("description", "")) + len((src.get("transcript") or {}).get("text", "")) + len(notes)
-    if src["video"] and not meta.get("title") and substance < 40:
-        return {"success": False, "error": "Could not read this video from the server (YouTube blocked the "
-                "request). Paste the transcript or key points into the text field and try again."}
-    if substance < 150:
-        src["warnings"].append("thin_source")
-
     lang = resolve_lang(lang_req, src, notes)
-    prompt = build_prompt(src, notes, lang)
-    try:
-        pack, problems = normalize(extract_json(call_gemini(prompt, budget=GEMINI_BUDGET)), lang)
-    except GeminiFail as e:
-        return gemini_error(e)
-    except (ValueError, TypeError):
-        pack, problems = None, ["invalid JSON"]
+    pack, problems, watched = None, [], False
+
+    # 1) no subtitles -> let Gemini watch the video itself
+    if src["video"] and not src.get("transcript") and not meta.get("live"):
+        src["sources"]["video_ai"] = "failed"
+        try:
+            text = call_gemini(build_prompt(src, notes, lang, watch=True), budget=min(VIDEO_BUDGET, time_left() - 30),
+                               media=video_media(src), try_timeout=VIDEO_TRY_TIMEOUT, hedge_after=30, max_parallel=2)
+            pack, problems = normalize(extract_json(text), lang)
+            if pack is not None:
+                watched = True
+                src["sources"]["video_ai"] = "watched"
+                src["warnings"] = [w for w in src["warnings"] if w != "subtitles_unavailable"]
+        except GeminiFail as e:
+            src["video_ai_reason"] = str(e)[:300]
+            if e.message == "NO_KEYS" or e.kind == "key":
+                return gemini_error(e)
+        except (ValueError, TypeError):
+            src["video_ai_reason"] = "invalid JSON"
+
+    if not watched:
+        if src["video"] and not meta.get("title") and substance < 40:
+            return {"success": False, "error": "Could not read this video from the server (YouTube blocked the "
+                    "request). Paste the transcript or key points into the text field and try again."}
+        if substance < 150:
+            src["warnings"].append("thin_source")
+        # 2) text-only pack (description, chapters, subtitles, notes)
+        if time_left() < 20:
+            return {"success": False, "error": "Gemini took too long to answer. Please press Generate again.",
+                    "setup": BUSY_HELP, "retry": True}
+        prompt = build_prompt(src, notes, lang)
+        try:
+            pack, problems = normalize(extract_json(
+                call_gemini(prompt, budget=min(GEMINI_BUDGET, time_left() - 6))), lang)
+        except GeminiFail as e:
+            return gemini_error(e)
+        except (ValueError, TypeError):
+            pack, problems = None, ["invalid JSON"]
 
     # one corrective retry if the answer did not pass validation and time allows
-    left = (REQUEST["deadline"] or time.time()) - time.time()
-    if problems and left > 30:
+    left = time_left()
+    if problems and left > 30 and watched and pack is not None:
+        # fix the draft written from the video with a cheap text-only call (no second video pass)
+        draft = {"telegram_post": pack["telegram_post"],
+                 "seo_article": {k: pack["seo_article"][k] for k in
+                                 ("h1", "meta_description", "intro", "sections", "conclusion_h2", "conclusion")},
+                 "social_posts": pack["social_posts"]}
+        fix = ("\n\nDRAFT WRITTEN AFTER WATCHING THE VIDEO (keep its facts and content):\n%s\n\n"
+               "THE DRAFT WAS REJECTED: %s. Return the complete corrected JSON and follow every requirement "
+               "exactly.\n" % (json.dumps(draft, ensure_ascii=False), "; ".join(problems)))
+        try:
+            pack2, problems2 = normalize(extract_json(
+                call_gemini(build_prompt(src, notes, lang) + fix, budget=left - 8)), lang)
+            if pack2 is not None and len(problems2) < len(problems):
+                pack, problems = pack2, problems2
+        except (GeminiFail, ValueError, TypeError):
+            pass
+    elif problems and left > 30 and not watched:
         fix = ("\n\nYOUR PREVIOUS ANSWER WAS REJECTED: %s. Return the complete JSON again and follow "
                "every requirement exactly.\n" % "; ".join(problems))
         try:
@@ -625,6 +697,20 @@ def generate(url, notes, lang_req):
     }
     out.update(pack)
     return out
+
+
+def time_left():
+    return (REQUEST["deadline"] or (time.time() + REQUEST_BUDGET)) - time.time()
+
+
+def video_media(src):
+    """Extra Gemini parts: the public YouTube video itself (fetched by Google, not by us)."""
+    vm = {"fps": VIDEO_FPS}
+    dur = int((src.get("meta") or {}).get("duration") or 0)
+    if dur > VIDEO_WATCH_LIMIT:
+        vm["endOffset"] = "%ds" % VIDEO_WATCH_LIMIT
+    return {"parts": [{"fileData": {"fileUri": src["video"]["url"]}, "videoMetadata": vm}],
+            "generation": {"mediaResolution": "MEDIA_RESOLUTION_LOW"}}
 
 
 def probe(url):
