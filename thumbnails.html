@@ -468,11 +468,12 @@
       overlayLabel: "Text on the thumbnail",
       download: "Download PNG (1280×720)",
       newBg: "New background",
-      bgLoading: "Drawing the AI background… a gradient is shown meanwhile.",
+      bgLoading: "Drawing the AI background…",
       bgOk: "AI background ready.",
       bgFail: "AI image service did not answer, a gradient background is used. Try “New background”.",
       bgQueued: "Waiting in line for the AI background…",
       bgWait: "AI background in ~{s} s (the free image service draws 1 picture every 45 seconds).",
+      bgTemp: "Temporary background from variant A.",
       copy: "Copy",
       copied: "Copied ✓",
       chars: "chars",
@@ -521,11 +522,12 @@
       overlayLabel: "Текст на обложке",
       download: "Скачать PNG (1280×720)",
       newBg: "Новый фон",
-      bgLoading: "Рисуем ИИ-фон… пока показан градиент.",
+      bgLoading: "Рисуем ИИ-фон…",
       bgOk: "ИИ-фон готов.",
       bgFail: "Сервис ИИ-картинок не ответил, используется градиентный фон. Нажмите «Новый фон».",
       bgQueued: "Ждём очереди на ИИ-фон…",
       bgWait: "ИИ-фон через ~{s} с (бесплатный сервис рисует 1 картинку раз в 45 секунд).",
+      bgTemp: "Временный фон от первой обложки.",
       copy: "Копировать",
       copied: "Скопировано ✓",
       chars: "симв.",
@@ -574,11 +576,12 @@
       overlayLabel: "Текст на обкладинці",
       download: "Завантажити PNG (1280×720)",
       newBg: "Новий фон",
-      bgLoading: "Малюємо ШІ-фон… поки що показано градієнт.",
+      bgLoading: "Малюємо ШІ-фон…",
       bgOk: "ШІ-фон готовий.",
       bgFail: "Сервіс ШІ-зображень не відповів, використано градієнтний фон. Натисніть «Новий фон».",
       bgQueued: "Чекаємо черги на ШІ-фон…",
       bgWait: "ШІ-фон приблизно через {s} с (безкоштовний сервіс малює 1 картинку раз на 45 секунд).",
+      bgTemp: "Тимчасовий фон від першої обкладинки.",
       copy: "Копіювати",
       copied: "Скопійовано ✓",
       chars: "симв.",
@@ -605,6 +608,8 @@
     concepts: [],      // concepts with editable overlay text
     bg: [],            // loaded background images (or null)
     bgState: [],       // "queued" | "loading" | "ok" | "fail"
+    bgErr: [],         // short reason of the last failure per card
+    sharedBg: null,    // first AI picture of this run, used as a temporary background for the others
     photo: null,       // user photo (downscaled canvas)
     photoName: ""
   };
@@ -736,6 +741,8 @@
     });
     state.bg = [null, null, null];
     state.bgState = ["queued", "queued", "queued"];
+    state.bgErr = ["", "", ""];
+    state.sharedBg = null;
     el("status").classList.add("hidden");
     el("results").classList.remove("hidden");
     renderNotice();
@@ -795,7 +802,10 @@
     var s = state.bgState[i], node = el("bgs" + i);
     if (!node) return;
     var eta = bgEta(i);
-    var map = { queued: ["", eta > 1 ? t("bgWait").replace("{s}", eta) : t("bgQueued"), true], loading: ["", t("bgLoading"), true], ok: ["ok", "✓ " + t("bgOk"), false], fail: ["warn", "⚠ " + t("bgFail"), false] };
+    var waitTxt = eta > 1 ? t("bgWait").replace("{s}", eta) : t("bgQueued");
+    if (state.sharedBg && !state.bg[i]) waitTxt = t("bgTemp") + " " + waitTxt;
+    var failTxt = "⚠ " + t("bgFail") + (state.bgErr[i] ? " (" + state.bgErr[i] + ")" : "");
+    var map = { queued: ["", waitTxt, true], loading: ["", (state.sharedBg && !state.bg[i] ? t("bgTemp") + " " : "") + t("bgLoading"), true], ok: ["ok", "✓ " + t("bgOk"), false], fail: ["warn", failTxt, false] };
     var m = map[s] || map.queued;
     node.className = "bg-state " + m[0];
     node.innerHTML = (m[2] ? '<span class="mini" aria-hidden="true"></span>' : "") + "<span>" + escapeHtml(m[1]) + "</span>";
@@ -807,9 +817,15 @@
   // So images are fetched with fetch() (status is checked), strictly one after another,
   // at least BG_GAP_MS apart — also across page reloads (localStorage) — with a countdown.
   // The picture is requested 80 px taller and the bottom strip with the free-tier mark is cut off.
-  var BG_GAP_MS = 47000, BG_TIMEOUT_MS = 60000, BG_MAX_TRIES = 3, BG_KEY = "csai_pollinations_last";
+  var BG_GAP_MS = 47000, BG_TIMEOUT_MS = 75000, BG_MAX_TRIES = 4, BG_KEY = "csai_pollinations_last";
   var BG_W = 1280, BG_H = 800, BG_CROP = 80 / 800;
-  var bgQueue = [], bgBusy = false, bgTimer = null, bgTicker = null, bgNotBefore = 0;
+  var bgQueue = [], bgBusy = false, bgTimer = null, bgTicker = null, bgNotBefore = 0, bgUseImg = false;
+
+  function bgErr(kind, short, retryMs) {
+    var e = new Error(short); e.short = short; e.retryMs = retryMs || 0;
+    e.busy = kind === "busy"; e.network = kind === "network";
+    return e;
+  }
 
   function bgUrl(prompt) {
     var seed = Math.floor(Math.random() * 1e9);
@@ -863,37 +879,70 @@
     bgMark();
     state.bgState[job.i] = "loading"; renderBgState(job.i); tickBg();
 
-    var ctrl = window.AbortController ? new AbortController() : null;
-    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, BG_TIMEOUT_MS);
-    fetch(bgUrl(state.concepts[job.i].prompt), { mode: "cors", credentials: "omit", signal: ctrl ? ctrl.signal : undefined })
-      .then(function (r) {
-        var type = r.headers.get("content-type") || "";
-        if (r.status === 402 || r.status === 429) {
-          var ra = parseInt(r.headers.get("retry-after") || "0", 10);
-          var e = new Error("busy"); e.busy = true; e.retryMs = Math.max(BG_GAP_MS, (ra || 0) * 1000); throw e;
-        }
-        if (!r.ok || type.indexOf("image/") !== 0) throw new Error("HTTP " + r.status);
-        return r.blob();
-      })
-      .then(function (blob) {
-        return new Promise(function (resolve, reject) {
-          var img = new Image();   // blob: URL is same-origin -> canvas stays exportable
-          img.onload = function () { resolve(img); };
-          img.onerror = function () { reject(new Error("bad image")); };
-          img.src = URL.createObjectURL(blob);
+    var url = bgUrl(state.concepts[job.i].prompt);
+    var timer = null, ctrl = null;
+    var loader = bgUseImg ? loadViaImg(url) : loadViaFetch(url).catch(function (e) {
+      if (e && e.network) { bgUseImg = true; return loadViaImg(bgUrl(state.concepts[job.i].prompt)); }   // fetch blocked -> plain <img>
+      throw e;
+    });
+    loader.then(function (img) {
+      img.cropBottom = img.naturalHeight > img.naturalWidth * 0.6 ? BG_CROP : 0;
+      done(true, img);
+    }, function (e) { done(false, null, e); });
+
+    function loadViaFetch(u) {
+      ctrl = window.AbortController ? new AbortController() : null;
+      timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, BG_TIMEOUT_MS);
+      return fetch(u, { mode: "cors", credentials: "omit", headers: { Accept: "image/*" }, signal: ctrl ? ctrl.signal : undefined })
+        .then(function (r) {
+          var type = r.headers.get("content-type") || "";
+          if (r.status === 402 || r.status === 429) {
+            var ra = parseInt(r.headers.get("retry-after") || "0", 10);
+            throw bgErr("busy", "HTTP " + r.status, Math.max(BG_GAP_MS, (ra || 0) * 1000));
+          }
+          if (!r.ok) throw bgErr("http", "HTTP " + r.status);
+          if (type.indexOf("image/") !== 0) throw bgErr("http", "not an image");
+          return r.blob();
+        }, function (e) {
+          if (e && e.name === "AbortError") throw bgErr("timeout", "timeout");
+          throw bgErr("network", "network");
+        })
+        .then(function (blob) {
+          return new Promise(function (resolve, reject) {
+            var img = new Image();   // blob: URL is same-origin -> canvas stays exportable
+            img.onload = function () { resolve(img); };
+            img.onerror = function () { reject(bgErr("http", "bad image")); };
+            img.src = URL.createObjectURL(blob);
+          });
         });
-      })
-      .then(function (img) {
-        img.cropBottom = img.naturalHeight > img.naturalWidth * 0.6 ? BG_CROP : 0;
-        done(true, img);
-      }, function (e) { done(false, null, e); });
+    }
+
+    function loadViaImg(u) {
+      return new Promise(function (resolve, reject) {
+        var img = new Image();
+        img.crossOrigin = "anonymous";   // keeps the canvas exportable
+        timer = setTimeout(function () { img.src = ""; reject(bgErr("timeout", "timeout")); }, BG_TIMEOUT_MS);
+        img.onload = function () {
+          // the "free limit" card is not our 1280x800 picture
+          var ratio = img.naturalWidth / Math.max(1, img.naturalHeight);
+          if (Math.abs(ratio - BG_W / BG_H) > 0.08) reject(bgErr("busy", "limit card", BG_GAP_MS)); else resolve(img);
+        };
+        img.onerror = function () { reject(bgErr("busy", "img error", BG_GAP_MS)); };
+        img.src = u;
+      });
+    }
 
     function done(ok, img, err) {
       clearTimeout(timer);
       bgBusy = false;
+      bgMark();   // the free tier counts 45 s from the end of the previous picture
       if (job.run !== state.run) { pumpBg(); return; }
       if (ok) {
-        state.bg[job.i] = img; state.bgState[job.i] = "ok";
+        state.bg[job.i] = img; state.bgState[job.i] = "ok"; state.bgErr[job.i] = "";
+        if (!state.sharedBg) {
+          state.sharedBg = img;   // others show it until their own picture arrives
+          for (var k = 0; k < state.concepts.length; k++) if (!state.bg[k]) { drawThumb(k); renderBgState(k); }
+        }
         drawThumb(job.i); renderBgState(job.i);
       } else if (job.attempt < BG_MAX_TRIES) {
         // rate limit (402) or a network/CORS error, which is usually the same limit: wait and retry
@@ -902,8 +951,9 @@
         bgQueue.unshift(job);
         state.bgState[job.i] = "queued"; renderBgState(job.i);
       } else {
-        state.bgState[job.i] = "fail"; renderBgState(job.i);
+        state.bgState[job.i] = "fail"; state.bgErr[job.i] = (err && err.short) || "error"; renderBgState(job.i);
       }
+      if (!ok && job.attempt <= BG_MAX_TRIES) state.bgErr[job.i] = (err && err.short) || "";
       pumpBg();
     }
   }
@@ -989,7 +1039,18 @@
     ctx.clearRect(0, 0, W, H);
 
     // 1) background
-    if (bg) drawCover(ctx, bg, 0, 0, W, H, 0.5); else drawGradientBg(ctx, accent, i);
+    if (bg) {
+      drawCover(ctx, bg, 0, 0, W, H, 0.5);
+    } else if (state.sharedBg) {
+      // until this card gets its own AI picture, reuse the first one (mirrored / shifted + accent tint)
+      ctx.save();
+      if (i % 2 === 1) { ctx.translate(W, 0); ctx.scale(-1, 1); }
+      drawCover(ctx, state.sharedBg, 0, 0, W, H, i === 2 ? 0.15 : 0.5);
+      ctx.restore();
+      ctx.fillStyle = rgba(accent, 0.18); ctx.fillRect(0, 0, W, H);
+    } else {
+      drawGradientBg(ctx, accent, i);
+    }
 
     // 2) vignette: dark left side for the headline + soft edges
     var v = ctx.createLinearGradient(0, 0, W * 0.68, 0);
