@@ -304,17 +304,25 @@ def fetch_transcript_proxy(video_id):
     headers = {"Accept": "application/json"}
     if SUBS_PROXY_TOKEN:
         headers["X-Token"] = SUBS_PROXY_TOKEN
+    started = time.time()
     try:
         raw = http_get(url, timeout=SUBS_PROXY_TIMEOUT, headers=headers)
     except urllib.error.HTTPError as e:
-        raise RuntimeError("HTTP %d" % e.code)
+        try:
+            body = e.read().decode("utf-8", "replace")[:120]
+        except Exception:
+            body = ""
+        raise RuntimeError("HTTP %d %s" % (e.code, body.strip()))
+    except Exception as e:  # timeout / DNS / TLS / connection refused
+        raise RuntimeError("%s after %.1fs: %s" % (type(e).__name__, time.time() - started, str(e)[:100]))
     try:
         data = json.loads(raw)
     except ValueError:
-        raise RuntimeError("answer is not JSON")
+        raise RuntimeError("answer is not JSON: %r" % raw[:80])
     text = data.get("text") if isinstance(data, dict) else None
     if not isinstance(text, str) or not text.strip():
-        raise RuntimeError("empty text")
+        keys = ", ".join(list(data)[:8]) if isinstance(data, dict) else type(data).__name__
+        raise RuntimeError("empty 'text' (got: %s)" % keys)
     text = re.sub(r"\s+", " ", text).strip()
     return {
         "text": text[:TRANSCRIPT_LIMIT],
