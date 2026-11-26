@@ -11,13 +11,13 @@ right on the page.
 - **Frontend:** a single static `index.html` (dark theme, fully responsive, EN / RU / UA).
 - **Backend:** a Vercel Serverless Function `api/analyze.py` written **only with the Python
   standard library** (`urllib`, `json`, `re`, `os`, …). No heavy dependencies.
-- **AI:** Google Gemini with **auto-discovered models** and a **ring carousel**:
-  1. the function asks Gemini which models your key can use (`GET /v1beta/models`, cached 15 min);
-  2. keeps only **text** models (support `generateContent`; embeddings, image, TTS, audio, live and video models are dropped);
-  3. walks them **in a circle** — the model that answered last is tried **first** on the next request;
-     on `429` / `5xx` / `404` it moves to the next model (and tries every key), failed models cool down for a while.
-  If discovery fails, a built-in fallback list is used. Check what the carousel sees at
-  **`/api/analyze?models=1`** (keys are never shown).
+- **AI:** Google Gemini via the shared client **`api/_gemini.py`** (files starting with `_` are not exposed as endpoints):
+  - fixed model ring: `gemini-flash-latest` → `gemini-3.8-flash` → `gemini-3.7-flash` → `gemini-3-flash-preview` → `gemini-pro-latest` (override with env `GEMINI_MODELS`);
+  - on **503 / 429 / timeout** the same model is **not** retried — the **next model** is used immediately;
+  - keys `GEMINI_API_KEY` → `_2` → `_3` rotate each time the model ring wraps, so every model × key pair is tried once;
+  - one request waits at most **25 s**; the model + key that answered last is tried **first** next time;
+  - `404` (unknown model) skips that model, `401/403` skips that key.
+  Carousel state: **`/api/analyze?models=1`** (keys are never shown).
 
 ---
 
@@ -67,7 +67,7 @@ blurred, locked cards with a single call-to-action button that opens the full re
 | `GEMINI_API_KEY`     | ✅ yes   | Primary Gemini API key (Google AI Studio).                         |
 | `GEMINI_API_KEY_2`   | optional | Second Gemini key (used in the rotation pool).                      |
 | `GEMINI_API_KEY_3`   | optional | Third Gemini key (used in the rotation pool).                       |
-| `GEMINI_MODELS`      | optional | Comma-separated model list; skips auto-discovery.                   |
+| `GEMINI_MODELS`      | optional | Comma-separated model ring overriding the default list.             |
 
 > **Gemini 429 (quota exceeded)?** Free limits are counted **per Google Cloud project and per model** (daily limits reset at midnight Pacific). Extra keys only help if they come from **different projects**. Check your live limits at https://aistudio.google.com/rate-limit or enable billing for higher limits.
 
