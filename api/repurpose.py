@@ -773,7 +773,7 @@ def video_media(src):
             "generation": {"mediaResolution": "MEDIA_RESOLUTION_LOW"}}
 
 
-def proxy_check():
+def proxy_check(port_override=None):
     """Where exactly Vercel tries to reach SUBS_PROXY_URL (no token, no query) and whether the port answers."""
     if not SUBS_PROXY_URL:
         return {"configured": False}
@@ -783,6 +783,8 @@ def proxy_check():
         port = u.port or (443 if u.scheme == "https" else 80)
     except ValueError:
         return {"configured": True, "hints": ["the port in SUBS_PROXY_URL is not a number"]}
+    if port_override:
+        port = port_override   # test another port of the same host without changing the env
     out = {"configured": True, "scheme": u.scheme or "(none)", "host": host or "(none)", "port": port,
            "path": u.path or "/", "token_set": bool(SUBS_PROXY_TOKEN)}
     hints = []
@@ -822,6 +824,26 @@ def proxy_check():
     if hints:
         out["hints"] = hints
     return out
+
+
+def proxy_answer(port_override=None):
+    """Real GET {SUBS_PROXY_URL}?v=<test id> with X-Token (optionally on another port): status + short body."""
+    url = SUBS_PROXY_URL
+    if port_override:
+        u = urllib.parse.urlsplit(url)
+        url = urllib.parse.urlunsplit((u.scheme, "%s:%d" % (u.hostname, port_override), u.path, u.query, ""))
+    old = globals()["SUBS_PROXY_URL"]
+    globals()["SUBS_PROXY_URL"] = url
+    t0 = time.time()
+    try:
+        tr = fetch_transcript_proxy("dQw4w9WgXcQ")
+        return {"url_path": urllib.parse.urlsplit(url).path or "/", "ok": True,
+                "transcript_chars": len(tr["text"]), "elapsed": round(time.time() - t0, 1)}
+    except Exception as e:
+        return {"url_path": urllib.parse.urlsplit(url).path or "/", "ok": False, "error": str(e)[:200],
+                "elapsed": round(time.time() - t0, 1)}
+    finally:
+        globals()["SUBS_PROXY_URL"] = old
 
 
 def probe(url):
@@ -880,7 +902,14 @@ class handler(BaseHTTPRequestHandler):  # noqa: N801 - required name for Vercel
     def do_GET(self):
         q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         if q.get("proxycheck"):
-            _send_json(self, {"status": "ok", "subs_proxy_check": proxy_check()})
+            try:
+                port = int((q.get("port") or ["0"])[0])
+            except ValueError:
+                port = 0
+            out = {"status": "ok", "subs_proxy_check": proxy_check(port if 0 < port < 65536 else None)}
+            if out["subs_proxy_check"].get("tcp", "").startswith("open"):
+                out["subs_proxy_answer"] = proxy_answer(port if 0 < port < 65536 else None)
+            _send_json(self, out)
             return
         if q.get("probe"):
             try:
