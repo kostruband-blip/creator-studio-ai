@@ -11,6 +11,9 @@ POST /api/repurpose   {"url": "https://youtu.be/...", "notes": "...", "lang": "a
    * public subtitles via the InnerTube player API / watch page. YouTube often blocks
      these requests from cloud IPs (Vercel) — then we simply continue with the
      title, description, chapters and the user's `notes`.
+   If YouTube refuses and SUBS_PROXY_URL is set, the subtitles are requested from our
+   backup server: GET {SUBS_PROXY_URL}?v={video_id} with header X-Token: {SUBS_PROXY_TOKEN}
+   (timeout 25 s); a non-empty JSON "text" is used as the full transcript.
    Only `notes` without a link also works.
    When there are no subtitles, Gemini WATCHES the public video itself (YouTube URL as
    fileData, low media resolution, first VIDEO_WATCH_LIMIT seconds) — Google fetches the
@@ -49,6 +52,11 @@ from _gemini import (  # noqa: E402
 
 YT_KEY = (os.environ.get("YOUTUBE_API_KEY") or "").strip()
 YT_BASE = "https://www.googleapis.com/youtube/v3/"
+# Our backup subtitle server (used only when YouTube refuses the direct request):
+# GET {SUBS_PROXY_URL}?v={video_id}  with header  X-Token: {SUBS_PROXY_TOKEN}  ->  {"text": "..."}
+SUBS_PROXY_URL = (os.environ.get("SUBS_PROXY_URL") or "").strip()
+SUBS_PROXY_TOKEN = (os.environ.get("SUBS_PROXY_TOKEN") or "").strip()
+SUBS_PROXY_TIMEOUT = 25
 UA_HEADER = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
              "(KHTML, like Gecko) Chrome/131.0 Safari/537.36")
 
@@ -289,6 +297,34 @@ def fetch_transcript(video_id, want_lang=""):
     }
 
 
+def fetch_transcript_proxy(video_id):
+    """Backup subtitle server. Returns a transcript dict or raises RuntimeError."""
+    sep = "&" if "?" in SUBS_PROXY_URL else "?"
+    url = SUBS_PROXY_URL + sep + urllib.parse.urlencode({"v": video_id})
+    headers = {"Accept": "application/json"}
+    if SUBS_PROXY_TOKEN:
+        headers["X-Token"] = SUBS_PROXY_TOKEN
+    try:
+        raw = http_get(url, timeout=SUBS_PROXY_TIMEOUT, headers=headers)
+    except urllib.error.HTTPError as e:
+        raise RuntimeError("HTTP %d" % e.code)
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        raise RuntimeError("answer is not JSON")
+    text = data.get("text") if isinstance(data, dict) else None
+    if not isinstance(text, str) or not text.strip():
+        raise RuntimeError("empty text")
+    text = re.sub(r"\s+", " ", text).strip()
+    return {
+        "text": text[:TRANSCRIPT_LIMIT],
+        "language": iso_to_lang(str(data.get("lang") or data.get("language") or "")),
+        "auto": bool(data.get("auto")) or data.get("kind") == "asr",
+        "via": "proxy",
+        "truncated": len(text) > TRANSCRIPT_LIMIT,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Collect all sources
 # ---------------------------------------------------------------------------
@@ -354,9 +390,19 @@ def collect(url, notes):
             out["transcript"] = fetch_transcript(vid, meta.get("language") or "")
             out["sources"]["subtitles"] = "auto" if out["transcript"]["auto"] else "manual"
         except Exception as e:
-            out["sources"]["subtitles"] = "blocked"
-            out["subtitles_reason"] = str(e)[:200]
-            out["warnings"].append("subtitles_unavailable")
+            reason = str(e)[:200]
+            if SUBS_PROXY_URL:  # YouTube refused us -> ask our backup subtitle server
+                try:
+                    out["transcript"] = fetch_transcript_proxy(vid)
+                except Exception as pe:
+                    reason += "; proxy: %s" % str(pe)[:120]
+            if out["transcript"]:
+                out["sources"]["subtitles"] = "auto" if out["transcript"]["auto"] else "manual"
+                out["sources"]["subtitles_via"] = "proxy"
+            else:
+                out["sources"]["subtitles"] = "blocked"
+                out["subtitles_reason"] = reason
+                out["warnings"].append("subtitles_unavailable")
     return out
 
 
@@ -719,6 +765,7 @@ def probe(url):
     return {
         "status": "ok",
         "youtube_key": bool(YT_KEY),
+        "subs_proxy": bool(SUBS_PROXY_URL),
         "video": src.get("video"),
         "error": src.get("error"),
         "sources": src["sources"],
@@ -772,7 +819,8 @@ class handler(BaseHTTPRequestHandler):  # noqa: N801 - required name for Vercel
             except Exception as e:
                 _send_json(self, {"status": "error", "error": str(e)[:300]})
             return
-        _send_json(self, {"status": "ok", "service": "Content Repurposer", "youtube_key": bool(YT_KEY)})
+        _send_json(self, {"status": "ok", "service": "Content Repurposer", "youtube_key": bool(YT_KEY),
+                                    "subs_proxy": bool(SUBS_PROXY_URL)})
 
     def do_POST(self):
         try:
