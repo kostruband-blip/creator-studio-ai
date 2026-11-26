@@ -5,16 +5,22 @@ so this module is only importable by the handlers in api/.
 
 Carousel rules
 --------------
-* Models are tried from a fixed ring (GEMINI_MODELS below, or env
-  GEMINI_MODELS="a,b,c" to override).
+* Model list comes from Gemini itself: GET /v1beta/models (ListModels) is
+  called first, and only TEXT models are kept (support generateContent; no
+  embedding / image / TTS / audio / live / video models). Models that Google
+  retires simply disappear from that list. The list is cached for 15 minutes.
+* Order: available models from PREFERRED_MODELS first (in that order), then
+  the other discovered text models (fast flash first, pro / gemma last).
+  If ListModels fails, PREFERRED_MODELS is used as a fallback.
+  Env GEMINI_MODELS="a,b,c" skips discovery and uses exactly that list.
 * On HTTP 503 / 429 / 5xx / timeout we do NOT retry the same model:
   we switch instantly to the NEXT model in the ring.
 * Keys (GEMINI_API_KEY, GEMINI_API_KEY_2, GEMINI_API_KEY_3) rotate too:
   every time the ring of models wraps around, the next key is used, so all
-  model x key combinations are covered exactly once per call.
+  model x key combinations are covered at most once per call.
 * One request waits at most GEMINI_TRY_TIMEOUT = 25 seconds.
 * The model + key that answered last is tried FIRST on the next request.
-* 404 (unknown model) skips that model; 401/403 (bad key) skips that key.
+* 404 (model gone) removes the model from the list; 401/403 skips that key.
 """
 
 import json
@@ -22,13 +28,16 @@ import os
 import re
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
-DEFAULT_MODELS = [
+# Priority order only: used first IF Gemini lists them as available,
+# and as a fallback list when ListModels itself fails.
+PREFERRED_MODELS = [
     "gemini-flash-latest",
     "gemini-3.8-flash",
     "gemini-3.7-flash",
@@ -36,11 +45,22 @@ DEFAULT_MODELS = [
     "gemini-pro-latest",
 ]
 
-GEMINI_MODELS = [
+# Optional hard override (skips discovery).
+ENV_MODELS = [
     m.strip().replace("models/", "")
-    for m in (os.environ.get("GEMINI_MODELS") or ",".join(DEFAULT_MODELS)).split(",")
+    for m in (os.environ.get("GEMINI_MODELS") or "").split(",")
     if m.strip()
 ]
+
+# Words that mark non-text models.
+NON_TEXT_MARKERS = (
+    "embed", "image", "imagen", "banana", "tts", "audio", "speech", "live",
+    "veo", "video", "lyria", "music", "aqa", "robotics", "computer-use",
+    "transcribe", "vision", "native",
+)
+
+MODEL_LIST_TTL_SEC = 15 * 60  # re-ask Gemini for the model list every 15 min
+LIST_TIMEOUT_SEC = 8          # ListModels request timeout
 
 GEMINI_KEYS = [
     k.strip()
@@ -60,9 +80,14 @@ REQUEST_BUDGET_SEC = 110   # whole API request (vercel.json maxDuration: 120)
 
 # State of a warm serverless instance.
 STATE = {
-    "model_i": 0,       # model that answered last -> tried first next time
+    "model": None,      # model that answered last -> tried first next time
     "key_i": 0,         # key that answered last
-    "last_ok": None,    # "model-name" of the last success (diagnostics)
+}
+MODELS = {
+    "list": [],         # current ring of text models
+    "fetched_at": 0.0,
+    "source": "",       # "gemini" (ListModels) | "env" | "fallback"
+    "discovered": 0,    # how many models ListModels returned in total
 }
 REQUEST = {"deadline": None}  # set per request via start_request()
 
@@ -262,36 +287,127 @@ def _try_once(model, key, prompt, timeout):
 # ---------------------------------------------------------------------------
 
 
-def attempt_order(n_models=None, n_keys=None, start_model=None, start_key=None):
-    """All (model_index, key_index) pairs in carousel order.
+def is_text_model(m):
+    """True for text-generation models from a ListModels entry."""
+    name = (m.get("name") or "").replace("models/", "")
+    if "generateContent" not in (m.get("supportedGenerationMethods") or []):
+        return False
+    if not (name.startswith("gemini") or name.startswith("gemma")):
+        return False
+    low = name.lower()
+    return not any(marker in low for marker in NON_TEXT_MARKERS)
+
+
+def _rank(name):
+    """Order for models outside PREFERRED_MODELS: fast flash first, pro/gemma last."""
+    low = name.lower()
+    m = re.search(r"(\d+(?:\.\d+)?)", low)
+    version = float(m.group(1)) if m else 0.0
+    unstable = ("preview" in low or "exp" in low
+                or re.search(r"-\d{3}$|-\d{2}-\d{2}", low) is not None)
+    if low.startswith("gemma"):
+        group = 6
+    elif "flash" in low and "lite" not in low:
+        group = 2 if unstable else 1
+    elif "flash" in low:
+        group = 3
+    elif "pro" in low:
+        group = 5
+    else:
+        group = 4
+    return (group, -version, low)
+
+
+def order_models(names):
+    """Preferred models (that exist) first, in preferred order; then the rest."""
+    available = set(names)
+    head = [m for m in PREFERRED_MODELS if m in available]
+    tail = sorted((m for m in available if m not in head), key=_rank)
+    return head + tail
+
+
+def list_text_models(key, timeout=LIST_TIMEOUT_SEC):
+    """Ask Gemini which models this key can use; keep only text models."""
+    found, total, page_token = [], 0, ""
+    for _ in range(10):  # pagination guard
+        url = GEMINI_BASE.rstrip("/") + "?pageSize=1000"
+        if page_token:
+            url += "&pageToken=" + urllib.parse.quote(page_token)
+        req = urllib.request.Request(url, headers={"x-goog-api-key": key.strip()})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        for m in data.get("models") or []:
+            total += 1
+            if is_text_model(m):
+                name = m["name"].replace("models/", "")
+                if name not in found:
+                    found.append(name)
+        page_token = data.get("nextPageToken") or ""
+        if not page_token:
+            break
+    return order_models(found), total
+
+
+def get_models(force=False):
+    """Current ring of text models (ListModels result, cached)."""
+    if ENV_MODELS:
+        if MODELS["source"] != "env":
+            MODELS.update(list=list(ENV_MODELS), source="env", fetched_at=time.time())
+        return MODELS["list"]
+    fresh = time.time() - MODELS["fetched_at"] < MODEL_LIST_TTL_SEC
+    if MODELS["list"] and fresh and not force:
+        return MODELS["list"]
+    for key in GEMINI_KEYS:
+        try:
+            models, total = list_text_models(key)
+        except Exception:
+            continue  # try the next key
+        if models:
+            MODELS.update(list=models, source="gemini", fetched_at=time.time(), discovered=total)
+            return models
+    # ListModels failed for every key: keep the last good list, else fallback.
+    if not MODELS["list"] or MODELS["source"] != "gemini":
+        MODELS.update(list=list(PREFERRED_MODELS), source="fallback", fetched_at=time.time())
+    return MODELS["list"]
+
+
+def _drop_model(model):
+    """Model is gone (404): remove it from the ring until the next refresh."""
+    if model in MODELS["list"] and len(MODELS["list"]) > 1:
+        MODELS["list"] = [m for m in MODELS["list"] if m != model]
+
+
+def attempt_order(models, n_keys=None):
+    """All (model, key_index) pairs in carousel order.
 
     The model changes on EVERY step; the key changes each time the model ring
-    wraps around. Starts from the pair that answered last.
+    wraps around. Starts from the model + key that answered last.
     """
-    m = len(GEMINI_MODELS) if n_models is None else n_models
+    m = len(models)
     k = len(GEMINI_KEYS) if n_keys is None else n_keys
-    sm = STATE["model_i"] % m if start_model is None else start_model
-    sk = STATE["key_i"] % k if start_key is None else start_key
-    return [((sm + i) % m, (sk + i // m) % k) for i in range(m * k)]
+    sm = models.index(STATE["model"]) if STATE["model"] in models else 0
+    sk = STATE["key_i"] % k
+    return [(models[(sm + i) % m], (sk + i // m) % k) for i in range(m * k)]
 
 
 def call_gemini(prompt):
     """Send a prompt through the model/key carousel. Returns the response text."""
     if not GEMINI_KEYS:
         raise GeminiFail(False, "NO_KEYS")
-    if not GEMINI_MODELS:
-        raise GeminiFail(False, "No Gemini models configured (GEMINI_MODELS is empty).")
 
     started = time.time()
     end = started + GEMINI_CALL_BUDGET
     if REQUEST["deadline"]:
         end = min(end, REQUEST["deadline"] - 4)
 
+    models = get_models()
+    if not models:
+        raise GeminiFail(False, "Gemini returned no text models for these keys.", 0, "model")
+
     dead_models, dead_keys = set(), set()
     errors = []  # (model, key_index, GeminiFail)
 
-    for model_i, key_i in attempt_order():
-        model = GEMINI_MODELS[model_i]
+    for model, key_i in attempt_order(models):
         if model in dead_models or key_i in dead_keys:
             continue
         remaining = end - time.time()
@@ -304,15 +420,17 @@ def call_gemini(prompt):
             errors.append((model, key_i, e))
             if e.kind == "model":
                 dead_models.add(model)
+                if e.code == 404:
+                    _drop_model(model)
             elif e.kind == "key":
                 dead_keys.add(key_i)
             elif not e.retryable:
                 raise
             # 503 / 429 / timeout: switch to the next model immediately.
-            if len(dead_keys) == len(GEMINI_KEYS) or len(dead_models) == len(GEMINI_MODELS):
+            if len(dead_keys) == len(GEMINI_KEYS) or len(dead_models) == len(models):
                 break
             continue
-        STATE.update(model_i=model_i, key_i=key_i, last_ok=model)
+        STATE.update(model=model, key_i=key_i)
         return text
 
     raise GeminiFail(False, _summarize(errors), 0, _dominant_kind(errors))
@@ -347,13 +465,17 @@ def _summarize(errors):
     return "%s Attempts: %d (%s). Google says: %s" % (head, len(errors), tried, sample[:240])
 
 
-def diagnostics():
+def diagnostics(refresh=True):
     """Safe info for GET /api/analyze?models=1 (never exposes keys)."""
+    models = get_models(force=refresh) if GEMINI_KEYS else []
+    nxt = STATE["model"] if STATE["model"] in models else (models[0] if models else None)
     return {
-        "models": GEMINI_MODELS,
+        "source": MODELS["source"] or "none",
+        "listed_by_gemini_total": MODELS["discovered"],
+        "text_models": models,
+        "next_model": nxt,
+        "last_ok": STATE["model"],
         "keys_configured": len(GEMINI_KEYS),
-        "next_model": GEMINI_MODELS[STATE["model_i"] % len(GEMINI_MODELS)] if GEMINI_MODELS else None,
-        "last_ok": STATE["last_ok"],
         "try_timeout_sec": GEMINI_TRY_TIMEOUT,
     }
 
