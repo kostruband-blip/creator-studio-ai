@@ -3,16 +3,23 @@
   "version": 2,
   "functions": {
     "api/analyze.py": {
-      "maxDuration": 60,
-      "memory": 256
+      "maxDuration": 120,
+      "memory": 256,
+      "includeFiles": "api/_gemini.py"
     }
   },
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
       ]
     }
   ]
