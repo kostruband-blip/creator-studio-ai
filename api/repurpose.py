@@ -826,12 +826,13 @@ def proxy_check(port_override=None):
     return out
 
 
-def proxy_answer(port_override=None):
+def proxy_answer(port_override=None, path_override=None):
     """Real GET {SUBS_PROXY_URL}?v=<test id> with X-Token (optionally on another port): status + short body."""
     url = SUBS_PROXY_URL
-    if port_override:
+    if port_override or path_override:
         u = urllib.parse.urlsplit(url)
-        url = urllib.parse.urlunsplit((u.scheme, "%s:%d" % (u.hostname, port_override), u.path, u.query, ""))
+        netloc = "%s:%d" % (u.hostname, port_override) if port_override else u.netloc
+        url = urllib.parse.urlunsplit((u.scheme, netloc, path_override or u.path, u.query, ""))
     old = globals()["SUBS_PROXY_URL"]
     globals()["SUBS_PROXY_URL"] = url
     t0 = time.time()
@@ -908,7 +909,9 @@ class handler(BaseHTTPRequestHandler):  # noqa: N801 - required name for Vercel
                 port = 0
             out = {"status": "ok", "subs_proxy_check": proxy_check(port if 0 < port < 65536 else None)}
             if out["subs_proxy_check"].get("tcp", "").startswith("open"):
-                out["subs_proxy_answer"] = proxy_answer(port if 0 < port < 65536 else None)
+                path = (q.get("path") or [""])[0].strip()
+                path = path if re.match(r"^/[A-Za-z0-9_./-]{0,60}$", path) else None
+                out["subs_proxy_answer"] = proxy_answer(port if 0 < port < 65536 else None, path)
             _send_json(self, out)
             return
         if q.get("probe"):
