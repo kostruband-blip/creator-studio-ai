@@ -89,6 +89,12 @@
   .eco b { font-size: 13px; }
   .eco small { color: var(--muted); font-size: 11px; }
 
+  .tg-btn {
+    display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 12px;
+    background: #1679ab; color: #fff; font-weight: 800; font-size: 13px; text-decoration: none;
+    box-shadow: 0 6px 18px rgba(22, 121, 171, 0.45); transition: transform .15s, background .15s;
+  }
+  .tg-btn:hover, .tg-btn:focus-visible { background: #12658f; transform: translateY(-1px); }
   .lang-switch { display: flex; gap: 4px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 4px; }
   .lang-switch button {
     border: 0; background: transparent; color: var(--muted);
@@ -236,7 +242,18 @@
     box-shadow: 0 10px 26px rgba(124, 92, 255, 0.5); transition: transform .15s;
     text-decoration: none; display: inline-block;
   }
-  .unlock-btn:hover { transform: translateY(-1px); }
+  .unlock-btn:hover, .unlock-btn:focus-visible { transform: translateY(-1px); box-shadow: 0 14px 34px rgba(25, 200, 255, 0.55); }
+  .unlock-btn { white-space: normal; line-height: 1.3; max-width: 100%; }
+  .tg-cta {
+    margin-top: 22px; text-align: center; padding: 24px 18px; border-radius: var(--radius);
+    background: linear-gradient(135deg, rgba(124, 92, 255, 0.16), rgba(25, 200, 255, 0.12));
+    border: 1px solid rgba(124, 92, 255, 0.55);
+  }
+  .tg-cta h3 { margin: 0 0 6px; font-size: 20px; }
+  .tg-cta p { margin: 0 0 14px; color: var(--muted); }
+  .tg-cta .unlock-btn { font-size: 16px; padding: 15px 22px; animation: ctaGlow 2.4s ease-in-out infinite; }
+  @keyframes ctaGlow { 0%, 100% { box-shadow: 0 10px 26px rgba(124, 92, 255, 0.5); } 50% { box-shadow: 0 10px 38px rgba(25, 200, 255, 0.75); } }
+  @media (prefers-reduced-motion: reduce) { .tg-cta .unlock-btn { animation: none; } }
 
   /* error */
   .error-box {
@@ -288,6 +305,7 @@
       <b id="eco2">CreatorDirectory</b>
       <small id="eco2desc">Catalog of 60+ tools for creators</small>
     </a>
+    <a class="tg-btn" id="tgHeaderBtn" href="https://t.me/remtex_shorts_ai_bot" target="_blank" rel="noopener"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M9.04 15.47 8.9 19.4c.4 0 .58-.17.79-.38l1.9-1.82 3.94 2.88c.72.4 1.24.19 1.43-.67l2.6-12.2c.24-1.08-.39-1.5-1.09-1.24L3.2 11.03c-1.04.4-1.03.98-.18 1.25l3.9 1.21 9.04-5.7c.43-.26.82-.12.5.17"/></svg><span id="tgOpen">Open in Telegram</span></a>
     <div class="lang-switch" id="langSwitch">
       <button data-lang="en" class="active">EN</button>
       <button data-lang="ru">RU</button>
@@ -345,7 +363,7 @@
           <div class="lock">🔒</div>
           <h4 id="lockedCompTitle">Unlock the complete report</h4>
           <p id="lockedCompText">See all 5 competitors with full stats and 10 clickable video ideas.</p>
-          <a class="unlock-btn" id="unlockCompBtn" href="https://t.me" target="_blank" rel="noopener">Unlock All 5 Competitors &amp; 10 Video Ideas in Telegram →</a>
+          <a class="unlock-btn" id="unlockCompBtn" href="https://t.me/remtex_shorts_ai_bot" target="_blank" rel="noopener">Unlock All 5 Competitors &amp; 10 Ideas in Telegram →</a>
         </div>
       </div>
     </div>
@@ -360,9 +378,16 @@
           <div class="lock">🔒</div>
           <h4 id="lockedIdeaTitle">Unlock the complete report</h4>
           <p id="lockedIdeaText">Get all 10 viral video ideas tailored to your niche.</p>
-          <a class="unlock-btn" id="unlockIdeaBtn" href="https://t.me" target="_blank" rel="noopener">Unlock All 5 Competitors &amp; 10 Video Ideas in Telegram →</a>
+          <a class="unlock-btn" id="unlockIdeaBtn" href="https://t.me/remtex_shorts_ai_bot" target="_blank" rel="noopener">Unlock All 5 Competitors &amp; 10 Ideas in Telegram →</a>
         </div>
       </div>
+    </div>
+
+    <!-- Telegram CTA under the blurred cards -->
+    <div class="tg-cta" id="tgCta">
+      <h3 id="ctaTitle">Get the full report in Telegram</h3>
+      <p id="ctaText">All 5 competitors with stats and 10 video ideas are waiting in our bot @remtex_shorts_ai_bot.</p>
+      <a class="unlock-btn" id="unlockCtaBtn" href="https://t.me/remtex_shorts_ai_bot" target="_blank" rel="noopener">Unlock All 5 Competitors &amp; 10 Ideas in Telegram →</a>
     </div>
   </section>
 </div>
@@ -372,6 +397,7 @@
   <div class="links">
     <a class="link" href="https://koshorts.vercel.app" target="_blank" rel="noopener" id="fEco1">KoShorts AI Studio</a>
     <a class="link" href="https://creator-directory-chi.vercel.app" target="_blank" rel="noopener" id="fEco2">CreatorDirectory</a>
+    <a class="link" href="https://t.me/remtex_shorts_ai_bot" target="_blank" rel="noopener" id="fBot">🤖 @remtex_shorts_ai_bot</a>
   </div>
 </footer>
 
@@ -396,7 +422,10 @@
       lockedTitle: "Unlock the complete report",
       lockedCompText: "See all 5 competitors with full stats and 10 clickable video ideas.",
       lockedIdeaText: "Get all 10 viral video ideas tailored to your niche.",
-      unlockBtn: "Unlock All 5 Competitors & 10 Video Ideas in Telegram →",
+      unlockBtn: "Unlock All 5 Competitors & 10 Ideas in Telegram →",
+      tgOpen: "Open in Telegram",
+      ctaTitle: "Get the full report in Telegram",
+      ctaText: "All 5 competitors with stats and 10 video ideas are waiting in our bot @remtex_shorts_ai_bot.",
       footerNote: "Free analysis · Full report in our Telegram bot",
       errTitle: "Setup needed",
       errGeneric: "Something went wrong",
@@ -422,7 +451,10 @@
       lockedTitle: "Откройте полный отчёт",
       lockedCompText: "Все 5 конкурентов с полной статистикой и 10 кликабельных идей видео.",
       lockedIdeaText: "Получите все 10 вирусных идей под вашу нишу.",
-      unlockBtn: "Открыть всех 5 конкурентов и 10 идей видео в Telegram →",
+      unlockBtn: "Разблокировать все 5 конкурентов и 10 идей в Telegram →",
+      tgOpen: "Открыть в Telegram",
+      ctaTitle: "Полный отчёт — в Telegram",
+      ctaText: "Все 5 конкурентов со статистикой и 10 идей для видео ждут вас в нашем боте @remtex_shorts_ai_bot.",
       footerNote: "Бесплатный анализ · Полный отчёт в нашем Telegram-боте",
       errTitle: "Требуется настройка",
       errGeneric: "Что-то пошло не так",
@@ -448,7 +480,10 @@
       lockedTitle: "Відкрийте повний звіт",
       lockedCompText: "Усі 5 конкурентів з повною статистикою та 10 клікабельних ідей відео.",
       lockedIdeaText: "Отримайте всі 10 вірусних ідей під вашу нішу.",
-      unlockBtn: "Відкрити всіх 5 конкурентів і 10 ідей відео в Telegram →",
+      unlockBtn: "Розблокувати всіх 5 конкурентів і 10 ідей у Telegram →",
+      tgOpen: "Відкрити в Telegram",
+      ctaTitle: "Повний звіт — у Telegram",
+      ctaText: "Усі 5 конкурентів зі статистикою та 10 ідей для відео чекають на вас у нашому боті @remtex_shorts_ai_bot.",
       footerNote: "Безкоштовний аналіз · Повний звіт у нашому Telegram-боті",
       errTitle: "Потрібне налаштування",
       errGeneric: "Щось пішло не так",
@@ -500,6 +535,10 @@
     el("lockedIdeaText").textContent = t("lockedIdeaText");
     el("unlockCompBtn").textContent = t("unlockBtn");
     el("unlockIdeaBtn").textContent = t("unlockBtn");
+    el("unlockCtaBtn").textContent = t("unlockBtn");
+    el("tgOpen").textContent = t("tgOpen");
+    el("ctaTitle").textContent = t("ctaTitle");
+    el("ctaText").textContent = t("ctaText");
     el("footerNote").textContent = t("footerNote");
     el("errorTitle").textContent = t("errTitle");
     el("eco1").textContent = t("eco1");
