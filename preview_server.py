@@ -213,6 +213,11 @@ class Handler(BaseHTTPRequestHandler):
             out = thumbs_api.fallback_payload(topic, (data.get("niche") or "").strip(),
                                               thumbs_api.parse_lang(data.get("lang")))
             out["ai"] = "gemini"  # preview: pretend the templates came from Gemini
+            vid, _rest = thumbs_api.split_topic(topic)
+            if vid:  # preview: pretend the YouTube link was resolved
+                out["video"] = {"id": vid, "url": "https://www.youtube.com/watch?v=" + vid,
+                                "title": "How to balance a car wheel at home (preview)", "channel": "Demo channel",
+                                "thumbnail": "https://i.ytimg.com/vi/%s/hqdefault.jpg" % vid}
             self._send(200, json.dumps(out, ensure_ascii=False))
         elif self.path.rstrip("/") in ("/api/repurpose", "/api/repurpose.py"):
             length = int(self.headers.get("Content-Length") or 0)

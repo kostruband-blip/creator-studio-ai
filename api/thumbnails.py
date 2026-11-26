@@ -17,6 +17,12 @@ timeout) a template result is returned with "ai": "fallback" so the tool
 still works. A missing or rejected Gemini key returns a clear JSON error
 with setup steps (never HTTP 500).
 
+A YouTube link in `topic` (youtube.com/watch?v=, youtu.be/, /shorts/, /live/) is
+resolved to the real video: title, channel, description excerpt and tags come from
+the YouTube Data API (YOUTUBE_API_KEY) or oEmbed, and the concepts/titles are made
+for THAT video instead of for the URL text. Any other words next to the link are
+kept as author notes. The response then also contains "video".
+
 The thumbnails themselves are rendered in the browser on <canvas>, so text
 on the image (incl. Cyrillic and Ukrainian і ї є ґ) is always crisp.
 """
@@ -26,12 +32,16 @@ import os
 import random
 import re
 import sys
+import time
+import urllib.error
 import urllib.parse
+import urllib.request
 from http.server import BaseHTTPRequestHandler
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _gemini import (  # noqa: E402
     KEY_HELP,
+    REQUEST,
     GeminiFail,
     call_gemini,
     diagnostics as gemini_diagnostics,
@@ -39,8 +49,13 @@ from _gemini import (  # noqa: E402
     start_request,
 )
 
-REQUEST_BUDGET = 52   # whole request; vercel.json maxDuration for this function: 60
+REQUEST_BUDGET = 54   # whole request; vercel.json maxDuration for this function: 60
 GEMINI_BUDGET = 45    # seconds for the Gemini carousel
+YT_KEY = (os.environ.get("YOUTUBE_API_KEY") or "").strip()
+YT_TIMEOUT = 6
+YT_URL = re.compile(
+    r"(?:https?://)?(?:www\.|m\.|music\.)?(?:youtube\.com/(?:watch\?(?:[^\s#]*?&)?v=|shorts/|live/|embed/)"
+    r"|youtu\.be/)([A-Za-z0-9_-]{11})[^\s]*", re.I)
 
 LANG_NAMES = {"en": "English", "ru": "Russian", "ua": "Ukrainian"}
 
@@ -273,7 +288,50 @@ def fallback_title(i, lang, topic):
 # ---------------------------------------------------------------------------
 
 
-def build_prompt(topic, niche, lang):
+# ---------------------------------------------------------------------------
+# YouTube link in the topic -> real video title / description
+# ---------------------------------------------------------------------------
+
+
+def _http_json(url, timeout=YT_TIMEOUT):
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 CreatorStudioAI"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8", "replace"))
+
+
+def fetch_video(video_id):
+    """{'title','channel','description','tags'} or None (not found / unreadable)."""
+    if YT_KEY:
+        try:
+            data = _http_json("https://www.googleapis.com/youtube/v3/videos?" + urllib.parse.urlencode(
+                {"part": "snippet", "id": video_id, "key": YT_KEY}))
+            items = data.get("items") or []
+            if not items:
+                return None
+            sn = items[0].get("snippet") or {}
+            return {"title": sn.get("title") or "", "channel": sn.get("channelTitle") or "",
+                    "description": sn.get("description") or "", "tags": (sn.get("tags") or [])[:12]}
+        except Exception:
+            pass  # quota / network -> oEmbed
+    try:
+        data = _http_json("https://www.youtube.com/oembed?format=json&url=" + urllib.parse.quote(
+            "https://www.youtube.com/watch?v=" + video_id, safe=""), timeout=5)
+        return {"title": data.get("title") or "", "channel": data.get("author_name") or "",
+                "description": "", "tags": []}
+    except Exception:
+        return None
+
+
+def split_topic(topic):
+    """'video https://youtu.be/ID how to ...' -> ('ID', 'video how to ...'); no link -> (None, topic)."""
+    m = YT_URL.search(topic or "")
+    if not m:
+        return None, topic
+    rest = re.sub(r"\s+", " ", (topic[:m.start()] + " " + topic[m.end():])).strip(" -—:|,")
+    return m.group(1), rest
+
+
+def build_prompt(topic, niche, lang, video=None, notes=""):
     lname = LANG_NAMES[lang]
     purity = {
         "en": "Write overlay_text, angle_name, ctr_tip and titles in English only — no Cyrillic letters.",
@@ -313,7 +371,24 @@ def build_prompt(topic, niche, lang):
     ) % {
         "l": lname, "mn": TITLE_MIN, "mx": TITLE_MAX, "smin": SCORE_MIN, "smax": SCORE_MAX,
         "purity": purity, "topic": topic, "niche": niche or "(not specified — infer from the topic)",
-    }
+    } + _video_context(video, notes)
+
+
+def _video_context(video, notes):
+    if not video:
+        return ""
+    out = ("\nThis is an EXISTING YouTube video. Make the thumbnails and titles about exactly what this "
+           "video shows (same subject, same objects in image_prompt), new packaging for it:\n"
+           "Current title: %s\nChannel: %s\n" % (video.get("title", ""), video.get("channel", "")))
+    desc = re.sub(r"https?://\S+", "", video.get("description") or "")
+    desc = re.sub(r"\s+", " ", desc).strip()[:700]
+    if desc:
+        out += "Description (excerpt): %s\n" % desc
+    if video.get("tags"):
+        out += "Tags: %s\n" % ", ".join(video["tags"])
+    if notes:
+        out += "Author notes: %s\n" % notes
+    return out
 
 
 def normalize(data, topic, lang):
@@ -414,8 +489,35 @@ def fallback_payload(topic, niche, lang):
 
 def generate(topic, niche, lang):
     start_request(REQUEST_BUDGET)
+    video, notes = None, ""
+    vid, rest = split_topic(topic)
+    if vid:
+        meta = fetch_video(vid)
+        if meta and meta.get("title"):
+            video = {"id": vid, "url": "https://www.youtube.com/watch?v=" + vid, "title": meta["title"],
+                     "channel": meta["channel"], "thumbnail": "https://i.ytimg.com/vi/%s/hqdefault.jpg" % vid,
+                     "description": meta["description"], "tags": meta["tags"]}
+            notes = rest
+            topic = _clean(meta["title"] + (" — " + rest if len(rest) >= 3 else ""), 200)
+        elif len(rest) >= 3:
+            topic = rest  # video unreadable, but the user also described it in words
+        else:
+            return {"success": False,
+                    "error": "Could not read this YouTube video (private, deleted or a wrong link). "
+                             "Describe the video topic in words instead.",
+                    "setup": {"title": "What to enter", "steps": [
+                        "A public video link: https://youtu.be/VIDEO_ID or https://www.youtube.com/watch?v=VIDEO_ID",
+                        "Or the topic / draft title in words, e.g. 'How to balance a car wheel at home'"]}}
+    out = _generate(topic, niche, lang, video, notes)
+    if video and out.get("success"):
+        out["video"] = {k: video[k] for k in ("id", "url", "title", "channel", "thumbnail")}
+    return out
+
+
+def _generate(topic, niche, lang, video=None, notes=""):
+    left = (REQUEST["deadline"] or (time.time() + REQUEST_BUDGET)) - time.time()
     try:
-        raw = call_gemini(build_prompt(topic, niche, lang), budget=GEMINI_BUDGET)
+        raw = call_gemini(build_prompt(topic, niche, lang, video, notes), budget=max(10, min(GEMINI_BUDGET, left - 4)))
     except GeminiFail as e:
         if e.message == "NO_KEYS":
             return {

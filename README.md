@@ -112,7 +112,9 @@ That's it — visit the deployed site, paste a YouTube link, and analyze.
 
 ## Thumbnail & Title Lab (`/thumbnails`)
 
-1. Enter the video topic or a draft title (or click one of 3 examples), optionally a niche,
+1. Enter the video topic, a draft title **or a YouTube link** (or click one of 3 examples). A link
+   is resolved on the server (YouTube Data API / oEmbed: title, channel, description, tags), so the
+   concepts and titles are made for that exact video. Optionally add a niche,
    pick the language of the titles / thumbnail text (EN / RU / UA) and optionally upload your
    photo or selfie (it never leaves the device).
 2. `api/thumbnails.py` asks Gemini (via `api/_gemini.py`) for strictly validated JSON:
@@ -124,8 +126,11 @@ That's it — visit the deployed site, paste a YouTube link, and analyze.
    If Gemini is overloaded the tool still answers with templates (`"ai": "fallback"`).
 3. The browser renders each thumbnail on an HTML5 canvas at 1280×720: AI background from the
    free `https://image.pollinations.ai/prompt/...?width=1280&height=720&nologo=true&seed=...`
-   endpoint (loaded one by one because of the free rate limit; a gradient background is shown
-   until it arrives or if it fails), dark vignette, your portrait on the side, and the big
+   endpoint. The free anonymous tier allows 1 image per 45 s per IP and otherwise answers HTTP 402
+   with a yellow "Free limit reached" picture, so backgrounds are fetched with `fetch()` (status
+   checked, 402 → wait and retry), strictly one at a time ≥ 47 s apart (remembered across reloads)
+   with a countdown on each card; a gradient background is shown meanwhile. Images are requested
+   at 1280×800 and the bottom strip with the free-tier mark is cropped off, dark vignette, your portrait on the side, and the big
    headline in Montserrat 900 with outline and an accent plate — so Cyrillic and the Ukrainian
    letters і ї є ґ are always perfect. Each card has **Download PNG (1280×720)**, editable text
    and **New background**. The 6 titles are shown as A/B cards with CTR bar, trigger and **Copy**.
