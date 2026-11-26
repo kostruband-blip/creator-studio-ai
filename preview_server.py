@@ -15,6 +15,12 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
+ICONS = {
+    "/favicon.ico": "image/x-icon",
+    "/favicon.svg": "image/svg+xml",
+    "/favicon-32.png": "image/png",
+    "/apple-touch-icon.png": "image/png",
+}
 
 
 def svg_avatar(text, hue=265):
@@ -104,6 +110,9 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(200, f.read(), "text/html; charset=utf-8")
             except Exception as e:
                 self._send(500, json.dumps({"error": str(e)}))
+        elif self.path in ICONS:
+            with open(os.path.join(ROOT, self.path.lstrip("/")), "rb") as f:
+                self._send(200, f.read(), ICONS[self.path])
         else:
             self._send(200, json.dumps({"status": "ok", "service": "NicheRadar AI (preview)"}))
 
