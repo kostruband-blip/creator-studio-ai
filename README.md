@@ -40,11 +40,13 @@ right on the page.
    that massively outperformed the channel average, and ask Gemini for 10 concrete, clickable
    titles/topics for the user's channel.
 
-### Monetization funnel
-After the analysis the **niche card**, the **first 2 competitors**, and the **first 3 video
-ideas** are shown for free. The remaining **3 competitors** and **7 ideas** are shown as
-blurred, locked cards with a single call-to-action button that opens the full report in the
-**Telegram bot** [@remtex_shorts_ai_bot](https://t.me/remtex_shorts_ai_bot) (`https://t.me/remtex_shorts_ai_bot`).
+### Results page
+After the analysis the full report is shown **open, with no paywall**: the niche card, all
+**5 competitors** and all **10 viral video ideas** (clickable, on desktop and mobile).
+Below the report an info block (EN / RU / UA) points to
+[KoShorts AI Studio](https://koshorts.vercel.app) and
+[CreatorDirectory](https://creator-directory-chi.vercel.app). The header and footer also link
+the Telegram bot [@remtex_shorts_ai_bot](https://t.me/remtex_shorts_ai_bot).
 
 ---
 
@@ -151,7 +153,7 @@ python3 -c "import api.analyze as a; print(a.analyze('https://www.youtube.com/@M
 
 ```
 .
-├── index.html          # Static frontend (dark theme, EN/RU/UA, paywall)
+├── index.html          # Static frontend (dark theme, EN/RU/UA, open report)
 ├── api/
 │   └── analyze.py      # Vercel Serverless Function (stdlib only)
 ├── vercel.json         # Function config + rewrites + headers
