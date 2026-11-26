@@ -44,7 +44,7 @@ right on the page.
 After the analysis the **niche card**, the **first 2 competitors**, and the **first 3 video
 ideas** are shown for free. The remaining **3 competitors** and **7 ideas** are shown as
 blurred, locked cards with a single call-to-action button that opens the full report in the
-**Telegram bot** (`https://t.me`).
+**Telegram bot** [@remtex_shorts_ai_bot](https://t.me/remtex_shorts_ai_bot) (`https://t.me/remtex_shorts_ai_bot`).
 
 ---
 
