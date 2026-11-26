@@ -628,7 +628,7 @@ def generate(url, notes, lang_req):
 
 
 def probe(url):
-    start_request(30)
+    start_request(REQUEST_BUDGET)  # same budget as a real run, so the subtitle step is really tried
     src = collect(url, "")
     return {
         "status": "ok",
