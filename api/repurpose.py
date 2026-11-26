@@ -301,10 +301,11 @@ def fetch_transcript(video_id, want_lang=""):
     }
 
 
-def fetch_transcript_proxy(video_id):
+def fetch_transcript_proxy(video_id, base=None):
     """Backup subtitle server. Returns a transcript dict or raises RuntimeError."""
-    sep = "&" if "?" in SUBS_PROXY_URL else "?"
-    url = SUBS_PROXY_URL + sep + urllib.parse.urlencode({"v": video_id})
+    base = base or SUBS_PROXY_URL
+    sep = "&" if "?" in base else "?"
+    url = base + sep + urllib.parse.urlencode({"v": video_id})
     headers = {"Accept": "application/json"}
     if SUBS_PROXY_TOKEN:
         headers["X-Token"] = SUBS_PROXY_TOKEN
@@ -327,8 +328,18 @@ def fetch_transcript_proxy(video_id):
         raise RuntimeError("answer is not JSON: %r" % raw[:80])
     text = data.get("text") if isinstance(data, dict) else None
     if not isinstance(text, str) or not text.strip():
-        keys = ", ".join(list(data)[:8]) if isinstance(data, dict) else type(data).__name__
-        raise RuntimeError("empty 'text' (got: %s)" % keys)
+        if isinstance(data, dict):
+            info = []
+            for k in list(data)[:10]:
+                v = data[k]
+                if k == "text":
+                    info.append("text=%r" % (v if not isinstance(v, str) else v[:20]))
+                elif isinstance(v, (str, int, float, bool)) or v is None:
+                    info.append("%s=%s" % (k, str(v)[:80]))
+                else:
+                    info.append(k)
+            raise RuntimeError("empty 'text' (server answered: %s)" % ", ".join(info))
+        raise RuntimeError("empty 'text' (got %s)" % type(data).__name__)
     text = re.sub(r"\s+", " ", text).strip()
     return {
         "text": text[:TRANSCRIPT_LIMIT],
@@ -826,25 +837,22 @@ def proxy_check(port_override=None):
     return out
 
 
-def proxy_answer(port_override=None, path_override=None):
-    """Real GET {SUBS_PROXY_URL}?v=<test id> with X-Token (optionally on another port): status + short body."""
+def proxy_answer(port_override=None, path_override=None, video_id="dQw4w9WgXcQ"):
+    """Real GET {SUBS_PROXY_URL}?v=<id> with X-Token (optionally another port / path): result + short error."""
     url = SUBS_PROXY_URL
     if port_override or path_override:
         u = urllib.parse.urlsplit(url)
         netloc = "%s:%d" % (u.hostname, port_override) if port_override else u.netloc
         url = urllib.parse.urlunsplit((u.scheme, netloc, path_override or u.path, u.query, ""))
-    old = globals()["SUBS_PROXY_URL"]
-    globals()["SUBS_PROXY_URL"] = url
     t0 = time.time()
+    out = {"url_path": urllib.parse.urlsplit(url).path or "/", "video_id": video_id}
     try:
-        tr = fetch_transcript_proxy("dQw4w9WgXcQ")
-        return {"url_path": urllib.parse.urlsplit(url).path or "/", "ok": True,
-                "transcript_chars": len(tr["text"]), "elapsed": round(time.time() - t0, 1)}
+        tr = fetch_transcript_proxy(video_id, base=url)
+        out.update({"ok": True, "transcript_chars": len(tr["text"]), "sample": tr["text"][:120]})
     except Exception as e:
-        return {"url_path": urllib.parse.urlsplit(url).path or "/", "ok": False, "error": str(e)[:200],
-                "elapsed": round(time.time() - t0, 1)}
-    finally:
-        globals()["SUBS_PROXY_URL"] = old
+        out.update({"ok": False, "error": str(e)[:300]})
+    out["elapsed"] = round(time.time() - t0, 1)
+    return out
 
 
 def probe(url):
@@ -911,7 +919,8 @@ class handler(BaseHTTPRequestHandler):  # noqa: N801 - required name for Vercel
             if out["subs_proxy_check"].get("tcp", "").startswith("open"):
                 path = (q.get("path") or [""])[0].strip()
                 path = path if re.match(r"^/[A-Za-z0-9_./-]{0,60}$", path) else None
-                out["subs_proxy_answer"] = proxy_answer(port if 0 < port < 65536 else None, path)
+                vid = extract_video_id((q.get("v") or [""])[0]) or "dQw4w9WgXcQ"
+                out["subs_proxy_answer"] = proxy_answer(port if 0 < port < 65536 else None, path, vid)
             _send_json(self, out)
             return
         if q.get("probe"):
