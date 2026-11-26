@@ -1,14 +1,18 @@
-# Creator Studio AI — NicheRadar AI + Thumbnail & Title Lab
+# Creator Studio AI — NicheRadar AI + Thumbnail & Title Lab + Content Repurposer
 
-Two free tools for YouTube creators on one site, with a shared header and tool switcher:
+Three free tools for YouTube creators on one site, with a shared header and a 3-tool switcher:
 
 | Tool | URL | What it does |
 | --- | --- | --- |
 | **NicheRadar AI** | `/` | Niche, Top 5 competitors and 10 viral video ideas for any channel |
 | **Thumbnail & Title Lab** | `/thumbnails` | 3 ready 16:9 thumbnails (PNG 1280×720) + 6 A/B titles with CTR score |
+| **Content Repurposer** | `/repurpose` | One YouTube video → Telegram post + SEO blog article + 5 short posts for X / Threads |
 
-Both tools use the shared Gemini client `api/_gemini.py` (key carousel, hedged fast timeouts)
+All tools use the shared Gemini client `api/_gemini.py` (key carousel, hedged fast timeouts)
 and the same UI language switch (EN default / RU / UA, remembered between pages).
+The tools link to each other: every NicheRadar idea has a **Create Thumbnail →** button
+(`/thumbnails?topic=...` pre-fills the topic), and the Repurposer links to the Lab with the
+video title and to KoShorts AI Studio / the Telegram bot for cutting the same video into Shorts.
 
 **NicheRadar AI** is a free tool that tells any YouTube creator their exact niche,
 reveals their **Top 5 competitors**, and generates **10 clickable viral video ideas** —
@@ -135,6 +139,42 @@ Missing `GEMINI_API_KEY` → `{"success": false, "error": "...", "setup": {"titl
 
 ---
 
+## Content Repurposer (`/repurpose`)
+
+1. Paste a YouTube video link (or click one of 3 examples). Optionally open
+   **"Or paste text / transcript / key points"** — with a link it adds detail, without a link
+   the pack is written from this text only. Pick the output language (Auto / EN / RU / UA).
+2. `api/repurpose.py` collects the source material, best effort and never failing hard:
+   title, channel, description, tags and **chapters** (timecodes parsed from the description)
+   via the YouTube Data API (`YOUTUBE_API_KEY`, oEmbed fallback for the title), plus
+   **subtitles** (InnerTube player → watch page caption tracks). YouTube often blocks
+   subtitles for datacenter IPs — then the pack is built from description + chapters + your
+   text and the response contains the warning `subtitles_unavailable` (shown in the UI).
+3. Gemini (via `api/_gemini.py`) returns strict JSON, re-validated on the server:
+   - `telegram_post` — 800–1300 chars: hook, 3–5 bullets, takeaway, CTA (the video link is inserted);
+   - `seo_article` — H1, meta description (≤160), intro, 3–4 H2 sections, conclusion,
+     2500–3500 chars; the server also builds ready `markdown` and `html`;
+   - `social_posts` — 5 posts ≤280 chars: insight, steps, mistake, tip, question.
+   Language purity is enforced (no Cyrillic in EN, no ы/э/ъ/ё in UA, no і/ї/є/ґ in RU);
+   if validation fails, one corrective Gemini retry is made.
+4. Every block has its own **Copy** button (article: Markdown or HTML); everything is free
+   and open, no sign-up.
+
+`POST /api/repurpose`
+
+```json
+{ "url": "https://www.youtube.com/watch?v=UF8uR6Z6KLc", "notes": "optional text / key points", "lang": "auto" }
+```
+
+Response: `{"success": true, "lang": "en", "video": {id,url,title,channel,thumbnail}|null,
+"sources": {api, oembed, description, chapters, subtitles: "manual|auto|blocked|none", notes},
+"warnings": [...], "telegram_post": "...", "seo_article": {h1, meta_description, intro, sections:[{h2,body}],
+conclusion_h2, conclusion, markdown, html}, "social_posts": [5 × {angle, text}], "stats": {...}}`.
+`GET /api/repurpose?probe=<youtube url>` is a diagnostic (metadata + subtitle availability, no Gemini call).
+Missing `GEMINI_API_KEY` → JSON error with setup steps (never a 500).
+
+---
+
 ## API
 
 `POST /api/analyze`
@@ -197,13 +237,15 @@ python3 -c "import api.analyze as a; print(a.analyze('https://www.youtube.com/@M
 .
 ├── index.html          # NicheRadar AI (dark theme, EN/RU/UA, open report)
 ├── thumbnails.html     # Thumbnail & Title Lab (canvas thumbnails, A/B titles), served at /thumbnails
+├── repurpose.html      # Content Repurposer (Telegram post, SEO article, 5 posts), served at /repurpose
 ├── api/
 │   ├── _gemini.py      # Shared Gemini client (key carousel, hedging) — not an endpoint
 │   ├── analyze.py      # POST /api/analyze    (stdlib only)
-│   └── thumbnails.py   # POST /api/thumbnails (stdlib only)
+│   ├── thumbnails.py   # POST /api/thumbnails (stdlib only)
+│   └── repurpose.py    # POST /api/repurpose  (stdlib only)
 ├── favicon.*, apple-touch-icon.png
 ├── preview_server.py   # Local preview with mock APIs (python3 preview_server.py)
-├── vercel.json         # Function config + /thumbnails rewrite + headers
+├── vercel.json         # Function config + /thumbnails, /repurpose rewrites + headers
 ├── requirements.txt    # Empty — standard library only
 └── README.md
 ```

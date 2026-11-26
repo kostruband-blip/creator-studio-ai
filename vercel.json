@@ -11,6 +11,11 @@
       "maxDuration": 60,
       "memory": 256,
       "includeFiles": "api/_gemini.py"
+    },
+    "api/repurpose.py": {
+      "maxDuration": 90,
+      "memory": 256,
+      "includeFiles": "api/_gemini.py"
     }
   },
   "rewrites": [
@@ -21,6 +26,14 @@
     {
       "source": "/thumbnails/",
       "destination": "/thumbnails.html"
+    },
+    {
+      "source": "/repurpose",
+      "destination": "/repurpose.html"
+    },
+    {
+      "source": "/repurpose/",
+      "destination": "/repurpose.html"
     }
   ],
   "headers": [
