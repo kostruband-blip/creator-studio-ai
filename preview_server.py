@@ -205,6 +205,9 @@ class Handler(BaseHTTPRequestHandler):
                 data = json.loads(self.rfile.read(length) or b"{}")
             except Exception:
                 data = {}
+            if data.get("bg"):  # optional Hugging Face background: real call only if HF_TOKEN is set
+                self._send(200, json.dumps(thumbs_api.hf_background(data["bg"], data.get("seed") or 1)))
+                return
             topic = (data.get("topic") or "").strip()
             if len(topic) < 3:
                 self._send(200, json.dumps({"success": False, "error": "Missing 'topic'."}))
@@ -213,6 +216,7 @@ class Handler(BaseHTTPRequestHandler):
             out = thumbs_api.fallback_payload(topic, (data.get("niche") or "").strip(),
                                               thumbs_api.parse_lang(data.get("lang")))
             out["ai"] = "gemini"  # preview: pretend the templates came from Gemini
+            out["hf"] = bool(thumbs_api.HF_TOKEN)
             vid, _rest = thumbs_api.split_topic(topic)
             if vid:  # preview: pretend the YouTube link was resolved
                 out["video"] = {"id": vid, "url": "https://www.youtube.com/watch?v=" + vid,

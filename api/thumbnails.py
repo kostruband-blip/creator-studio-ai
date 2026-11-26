@@ -24,8 +24,19 @@ for THAT video instead of for the URL text. Any other words next to the link are
 kept as author notes. The response then also contains "video".
 
 The thumbnails themselves are rendered in the browser on <canvas>, so text
-on the image (incl. Cyrillic and Ukrainian і ї є ґ) is always crisp.
+on the image (incl. Cyrillic and Ukrainian і ї є ґ) is always crisp. Every concept
+also carries bg_prompt (<= 12 English words, for the free image service),
+highlight (the accent word of overlay_text) and badge (1-2 word sticker).
+
+POST /api/thumbnails   {"bg": "<image prompt>", "seed": 123}
+  Optional AI background through Hugging Face when HF_TOKEN is set in Vercel
+  (free token: huggingface.co/settings/tokens). Returns
+  {"success": true, "image": "data:image/...;base64,...", "model": "..."}
+  or {"success": false, "error": "...", "code": 401|402|503|...}. Without HF_TOKEN the
+  browser uses the free Pollinations service instead.
 """
+
+import base64
 
 import json
 import os
@@ -52,6 +63,15 @@ from _gemini import (  # noqa: E402
 REQUEST_BUDGET = 54   # whole request; vercel.json maxDuration for this function: 60
 GEMINI_BUDGET = 45    # seconds for the Gemini carousel
 YT_KEY = (os.environ.get("YOUTUBE_API_KEY") or "").strip()
+HF_TOKEN = (os.environ.get("HF_TOKEN") or "").strip()
+HF_URL = "https://router.huggingface.co/hf-inference/models/"
+HF_MODELS = [m.strip() for m in (os.environ.get("HF_MODEL") or "").split(",") if m.strip()] + [
+    "black-forest-labs/FLUX.1-schnell",
+    "stabilityai/stable-diffusion-xl-base-1.0",
+]
+HF_BUDGET = 52        # seconds for one background (function maxDuration 60)
+BG_W, BG_H = 1280, 720
+SHORT_PROMPT_WORDS = 12
 YT_TIMEOUT = 6
 YT_URL = re.compile(
     r"(?:https?://)?(?:www\.|m\.|music\.)?(?:youtube\.com/(?:watch\?(?:[^\s#]*?&)?v=|shorts/|live/|embed/)"
@@ -83,6 +103,9 @@ UA_ONLY = re.compile(u"[іїєґІЇЄҐ]")      # must never appear in Russian
 TRAILING_PUNCT = re.compile(u"[\\s.,!?;:…\\-–—\"'«»“”„()\\[\\]]+$")
 LEADING_PUNCT = re.compile(u"^[\\s.,!?;:…\\-–—\"'«»“”„()\\[\\]]+")
 HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
+STOPWORDS = set("""a an the of on in at to for with and or by from into onto over under is are be that which
+this these those its it his her their very some any as while background photo image picture scene
+how what why who i me my you your we our do does did can will""".split())
 
 
 # ---------------------------------------------------------------------------
@@ -141,13 +164,47 @@ def clean_color(value, i):
     return v.upper()
 
 
-def clean_image_prompt(value, topic):
+def _scene(value, topic):
     s = _clean(value, 380)
     if not s or CYRILLIC.search(s):
         # Gemini did not give an English prompt -> generic but on-topic scene
         s = "Dramatic eye-catching scene that illustrates the video topic: " + _clean(topic, 120)
-    s = s.rstrip(" .,")
-    return s + ". " + IMAGE_SUFFIX
+    return s.rstrip(" .,")
+
+
+def clean_image_prompt(value, topic):
+    return _scene(value, topic) + ". " + IMAGE_SUFFIX
+
+
+def short_prompt(value, scene):
+    """<= 12 English words for the free image service (long prompts get the 'limit' card more often)."""
+    tail = ["cinematic", "thumbnail", "no", "text"]
+    src = _clean(value, 200)
+    if not src or CYRILLIC.search(src):
+        src = scene
+    words = [w for w in re.findall(r"[A-Za-z][A-Za-z0-9'-]*", src)
+             if w.lower() not in STOPWORDS and w.lower() not in ("text", "letters", "logo", "logos", "watermark")]
+    if len(words) < 2:
+        words = ["dramatic", "studio", "scene"]
+    words = words[:SHORT_PROMPT_WORDS - len(tail)]
+    return " ".join(words + tail)
+
+
+def clean_highlight(value, overlay):
+    """One word of overlay_text that gets the accent colour; '' -> the browser picks one."""
+    w = TRAILING_PUNCT.sub("", LEADING_PUNCT.sub("", _clean(value, 30)))
+    if not w or " " in w:
+        return ""
+    words = [TRAILING_PUNCT.sub("", x).lower() for x in overlay.split()]
+    return w.upper() if w.lower() in words else ""
+
+
+def clean_badge(value, lang, i):
+    s = _clean(value, 24).replace('"', "")
+    s = LEADING_PUNCT.sub("", TRAILING_PUNCT.sub("", s))
+    if not s or len(s) > 16 or len(s.split()) > 2 or not lang_ok(s, lang):
+        return FALLBACK_BADGES[lang][i % N_CONCEPTS]
+    return s.upper()
 
 
 def trim_title(s):
@@ -198,6 +255,18 @@ FALLBACK_CONCEPTS = {
          "Попередження вмикає страх втрати: глядач клікає, щоб не повторити помилку."),
     ],
 }
+
+FALLBACK_BADGES = {
+    "en": ["MUST SEE", "BEFORE / AFTER", "WARNING"],
+    "ru": ["СМОТРИ", "ДО / ПОСЛЕ", "ВНИМАНИЕ"],
+    "ua": ["ДИВИСЬ", "ДО / ПІСЛЯ", "УВАГА"],
+}
+
+FALLBACK_SHORT = [   # topic-free scenes when the topic is not in English
+    "surprised person looking at glowing mysterious object",
+    "dramatic before and after transformation split scene",
+    "shocked person under red warning light",
+]
 
 FALLBACK_SCENES = [
     "Close-up of a surprised person looking at a mysterious glowing object related to {t}",
@@ -266,8 +335,13 @@ def fallback_concept(i, lang, topic):
     return {
         "angle_name": angle,
         "overlay_text": overlay,
+        "highlight": "",
+        "badge": FALLBACK_BADGES[lang][i % N_CONCEPTS],
         "accent_color": PALETTE[i % len(PALETTE)],
         "image_prompt": clean_image_prompt(scene, topic),
+        "bg_prompt": short_prompt("" if CYRILLIC.search(topic) else
+                                  " ".join(_clean(topic, 120).split()[:6]) + " " + FALLBACK_SHORT[i % N_CONCEPTS],
+                                  FALLBACK_SHORT[i % N_CONCEPTS]),
         "ctr_tip": tip,
         "source": "fallback",
     }
@@ -343,8 +417,8 @@ def build_prompt(topic, niche, lang, video=None, notes=""):
     return (
         "You are a top YouTube packaging strategist (thumbnails + titles) who maximises CTR.\n"
         "Reply with ONLY valid minified JSON, no markdown, no commentary, exactly this shape:\n"
-        '{"concepts":[{"angle_name":"","overlay_text":"","accent_color":"#RRGGBB",'
-        '"image_prompt":"","ctr_tip":""}],'
+        '{"concepts":[{"angle_name":"","overlay_text":"","highlight":"","badge":"","accent_color":"#RRGGBB",'
+        '"image_prompt":"","bg_prompt":"","ctr_tip":""}],'
         '"titles":[{"title":"","ctr_score":90,"trigger":""}]}\n\n'
         "Rules:\n"
         "- concepts: EXACTLY 3, each a clearly different psychological angle for an A/B test "
@@ -352,12 +426,17 @@ def build_prompt(topic, niche, lang, video=None, notes=""):
         "- angle_name: short name of the angle in %(l)s (1-4 words).\n"
         "- overlay_text: the punchy text printed ON the thumbnail, STRICTLY 2-4 words in %(l)s, "
         "no punctuation at the end, no emoji, no hashtags. It must not repeat the title.\n"
+        "- highlight: the ONE most powerful word of overlay_text (a number, a result or an emotional "
+        "word), copied exactly from overlay_text. It is painted in the accent colour.\n"
+        "- badge: a sticker text in %(l)s, 1-2 words, max 14 characters, e.g. a result, a time or a "
+        "price ('5 MINUTES', '100%% WORKS'). No emoji.\n"
         "- accent_color: one bright high-contrast HEX colour for the text plate, "
         "e.g. #FACC15, #EF4444, #22C55E, #F97316, #06B6D4. Use a different colour per concept.\n"
         "- image_prompt: a detailed prompt IN ENGLISH for an AI image generator that creates a clean "
         "background photo/scene WITHOUT any text: YouTube thumbnail style, studio lighting, high "
         "contrast, one clear subject placed on the RIGHT third, empty uncluttered space on the LEFT "
         "for the headline, no small details. Never ask for text, letters, logos or captions.\n"
+        "- bg_prompt: the same scene IN ENGLISH in 6-9 words only (subject + action + mood), no text.\n"
         "- ctr_tip: ONE sentence in %(l)s explaining why viewers click this visual approach.\n"
         "- titles: EXACTLY 6 different clickable video titles in %(l)s, each %(mn)d-%(mx)d characters, "
         "specific to the topic, no clickbait cliches (no 'you won't believe', 'shocking', 'insane'), "
@@ -418,11 +497,15 @@ def normalize(data, topic, lang):
             color = next(p for p in PALETTE if p not in used_colors)
         used_colors.add(color)
         fb = fallback_concept(i, lang, topic)
+        scene = _scene(c.get("image_prompt"), topic)
         concepts.append({
             "angle_name": angle or fb["angle_name"],
             "overlay_text": overlay,
+            "highlight": clean_highlight(c.get("highlight"), overlay),
+            "badge": clean_badge(c.get("badge"), lang, i),
             "accent_color": color,
-            "image_prompt": clean_image_prompt(c.get("image_prompt"), topic),
+            "image_prompt": scene + ". " + IMAGE_SUFFIX,
+            "bg_prompt": short_prompt(c.get("bg_prompt"), scene),
             "ctr_tip": tip or fb["ctr_tip"],
             "source": "gemini",
         })
@@ -509,6 +592,8 @@ def generate(topic, niche, lang):
                         "A public video link: https://youtu.be/VIDEO_ID or https://www.youtube.com/watch?v=VIDEO_ID",
                         "Or the topic / draft title in words, e.g. 'How to balance a car wheel at home'"]}}
     out = _generate(topic, niche, lang, video, notes)
+    if out.get("success"):
+        out["hf"] = bool(HF_TOKEN)
     if video and out.get("success"):
         out["video"] = {k: video[k] for k in ("id", "url", "title", "channel", "thumbnail")}
     return out
@@ -564,6 +649,77 @@ def _generate(topic, niche, lang, video=None, notes=""):
     }
 
 
+# ---------------------------------------------------------------------------
+# Optional AI background through Hugging Face (HF_TOKEN)
+# ---------------------------------------------------------------------------
+
+HF_HELP = {"title": "Free AI backgrounds via Hugging Face (optional)", "steps": [
+    "Create a free account at huggingface.co and open Settings -> Access Tokens.",
+    "Create a token (type: Read is enough, or Fine-grained with 'Make calls to Inference Providers').",
+    "Vercel -> Project -> Settings -> Environment Variables: add HF_TOKEN = hf_...",
+    "Redeploy. Without HF_TOKEN the free Pollinations service is used automatically."]}
+
+
+def _hf_error(e):
+    try:
+        body = e.read().decode("utf-8", "replace")
+    except Exception:
+        body = ""
+    msg = body
+    try:
+        j = json.loads(body)
+        msg = j.get("error") if isinstance(j, dict) else body
+        if isinstance(msg, dict):
+            msg = msg.get("message") or json.dumps(msg)
+    except ValueError:
+        pass
+    return re.sub(r"\s+", " ", str(msg or ""))[:160]
+
+
+def hf_background(prompt, seed):
+    """-> {"success": True, "image": data-URL, "model"} or {"success": False, "error", "code"}."""
+    if not HF_TOKEN:
+        return {"success": False, "code": 0, "error": "HF_TOKEN is not set", "setup": HF_HELP}
+    prompt = _clean(prompt, 600) or "dramatic cinematic studio scene, no text"
+    deadline = time.time() + HF_BUDGET
+    last = {"success": False, "code": 503, "error": "no model answered"}
+    for model in HF_MODELS:
+        left = deadline - time.time()
+        if left < 6:
+            break
+        params = {"width": BG_W, "height": BG_H, "seed": int(seed) % 2147483647,
+                  "negative_prompt": "text, letters, words, logo, watermark, caption, blurry"}
+        if "schnell" in model.lower():
+            params["num_inference_steps"] = 4
+            params.pop("negative_prompt")
+        body = json.dumps({"inputs": prompt, "parameters": params}).encode("utf-8")
+        req = urllib.request.Request(HF_URL + model, data=body, headers={
+            "Authorization": "Bearer " + HF_TOKEN, "Content-Type": "application/json",
+            "Accept": "image/jpeg", "User-Agent": "CreatorStudioAI/1.0"})
+        try:
+            with urllib.request.urlopen(req, timeout=left) as resp:
+                ctype = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+                data = resp.read()
+            if not ctype.startswith("image/") or len(data) < 2000:
+                last = {"success": False, "code": 502, "error": "%s: not an image (%s)" % (model, ctype)}
+                continue
+            return {"success": True, "model": model,
+                    "image": "data:%s;base64,%s" % (ctype, base64.b64encode(data).decode("ascii"))}
+        except urllib.error.HTTPError as e:
+            last = {"success": False, "code": e.code, "error": "%s: HTTP %d %s" % (model, e.code, _hf_error(e))}
+            if e.code in (401, 403):
+                last["error"] = "HF_TOKEN was rejected by Hugging Face (HTTP %d)" % e.code
+                last["setup"] = HF_HELP
+                return last   # the same token fails for every model
+            if e.code == 402:
+                last["error"] = "Hugging Face free monthly credits are used up (HTTP 402)"
+                return last
+            # 400/404 (model not served) / 410 / 429 / 503 (loading) -> next model
+        except Exception as e:  # timeout / network
+            last = {"success": False, "code": 504, "error": "%s: %s %s" % (model, type(e).__name__, str(e)[:80])}
+    return last
+
+
 def parse_lang(value):
     v = str(value or "en").strip().lower()
     if v in ("uk", "ua", "uk-ua"):
@@ -606,7 +762,7 @@ class handler(BaseHTTPRequestHandler):  # noqa: N801 - required name for Vercel
             out.update(gemini_diagnostics())
             _send_json(self, out)
             return
-        _send_json(self, {"status": "ok", "service": "Thumbnail & Title Lab"})
+        _send_json(self, {"status": "ok", "service": "Thumbnail & Title Lab", "hf": bool(HF_TOKEN)})
 
     def do_POST(self):
         try:
@@ -618,6 +774,13 @@ class handler(BaseHTTPRequestHandler):  # noqa: N801 - required name for Vercel
                 data = {}
             if not isinstance(data, dict):
                 data = {}
+            if data.get("bg"):
+                try:
+                    seed = int(data.get("seed") or random.randint(1, 10 ** 9))
+                except (TypeError, ValueError):
+                    seed = random.randint(1, 10 ** 9)
+                _send_json(self, hf_background(data.get("bg"), seed))
+                return
             topic = _clean(data.get("topic"), 200)
             niche = _clean(data.get("niche"), 120)
             lang = parse_lang(data.get("lang"))
