@@ -147,8 +147,9 @@ def mock_repurpose(url, notes, lang):
         pack["telegram_post"] = pack["telegram_post"].replace("[link]", u)
     out = {"success": True, "lang": "en", "video": video,
            "sources": {"api": bool(video), "oembed": False, "description": bool(video), "chapters": 4 if video else 0,
-                       "subtitles": "blocked" if video else "none", "notes": bool(notes)},
-           "warnings": (["subtitles_unavailable"] if video else []) + (["quality: " + "; ".join(problems)] if problems else [])}
+                       "subtitles": "blocked" if video else "none", "notes": bool(notes),
+                       "video_ai": "watched" if video else None},
+           "warnings": ["quality: " + "; ".join(problems)] if problems else []}
     out.update(pack)
     return out
 

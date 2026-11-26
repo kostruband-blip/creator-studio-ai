@@ -205,16 +205,23 @@ def _thinking_config(model):
     return None
 
 
-def gemini_request(model, key, prompt, timeout=GEMINI_TRY_TIMEOUT, json_mode=True, thinking=True):
-    """One generateContent call. Raises GeminiFail with a classified kind."""
+def gemini_request(model, key, prompt, timeout=GEMINI_TRY_TIMEOUT, json_mode=True, thinking=True, media=None):
+    """One generateContent call. Raises GeminiFail with a classified kind.
+
+    media (optional): {"parts": [...extra parts before the prompt, e.g. a YouTube fileData...],
+                       "generation": {...extra generationConfig, e.g. mediaResolution...}}
+    """
+    parts = list((media or {}).get("parts") or []) + [{"text": prompt}]
     body = {
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "contents": [{"role": "user", "parts": parts}],
         "generationConfig": {
             "temperature": 0.9,
             "topP": 1,
             "maxOutputTokens": 8192,
         },
     }
+    if media and media.get("generation"):
+        body["generationConfig"].update(media["generation"])
     if json_mode:
         body["generationConfig"]["responseMimeType"] = "application/json"
     tcfg = _thinking_config(model) if thinking else None
@@ -268,7 +275,7 @@ def gemini_request(model, key, prompt, timeout=GEMINI_TRY_TIMEOUT, json_mode=Tru
         raise GeminiFail(True, "Unexpected Gemini response: %s" % str(e)[:200], 0, "bad_response")
 
 
-def _try_once(model, key, prompt, timeout):
+def _try_once(model, key, prompt, timeout, media=None):
     """One model+key attempt; adapts the request format, never repeats on 503/429."""
     for _ in range(3):
         try:
@@ -276,6 +283,7 @@ def _try_once(model, key, prompt, timeout):
                 model, key, prompt, timeout=timeout,
                 json_mode=model not in _NO_JSON_MODE,
                 thinking=model not in _NO_THINKING_CFG,
+                media=media,
             )
         except GeminiFail as e:
             # Only format problems are re-sent to the same model.
@@ -397,7 +405,7 @@ def attempt_order(models, n_keys=None):
     return [(models[(sm + i) % m], (sk + i // m) % k) for i in range(m * k)]
 
 
-def call_gemini(prompt, budget=None):
+def call_gemini(prompt, budget=None, media=None, try_timeout=None, hedge_after=None, max_parallel=None):
     """Send a prompt through the model/key carousel. Returns the response text.
 
     Hedged carousel:
@@ -406,7 +414,14 @@ def call_gemini(prompt, budget=None):
       parallel (max MAX_PARALLEL in flight), so one slow overloaded model
       cannot eat the whole time budget;
     * the first successful answer wins; each model waits <= GEMINI_TRY_TIMEOUT.
+
+    media / try_timeout / hedge_after / max_parallel: used for multimodal calls
+    (Gemini watching a YouTube video needs more than 25 s per model, and fewer
+    parallel copies because every copy processes the whole video).
     """
+    try_timeout = try_timeout or GEMINI_TRY_TIMEOUT
+    hedge_after = hedge_after or HEDGE_AFTER_SEC
+    max_parallel = max_parallel or MAX_PARALLEL
     if not GEMINI_KEYS:
         raise GeminiFail(False, "NO_KEYS")
 
@@ -416,6 +431,8 @@ def call_gemini(prompt, budget=None):
         end = min(end, REQUEST["deadline"] - 4)
 
     models = get_models()
+    if media:  # only Gemini models accept video input (not Gemma)
+        models = [m for m in models if m.lower().startswith("gemini")] or models
     if not models:
         raise GeminiFail(False, "Gemini returned no text models for these keys.", 0, "model")
 
@@ -428,7 +445,7 @@ def call_gemini(prompt, budget=None):
 
     def worker(aid, model, key_i, timeout):
         try:
-            results.put((aid, model, key_i, _try_once(model, GEMINI_KEYS[key_i], prompt, timeout), None))
+            results.put((aid, model, key_i, _try_once(model, GEMINI_KEYS[key_i], prompt, timeout, media), None))
         except GeminiFail as e:
             results.put((aid, model, key_i, None, e))
         except Exception as e:  # never let a thread die silently
@@ -453,7 +470,7 @@ def call_gemini(prompt, budget=None):
             aid = next_id[0]
             next_id[0] += 1
             in_flight[aid] = (model, key_i)
-            t = threading.Thread(target=worker, args=(aid, model, key_i, min(GEMINI_TRY_TIMEOUT, remaining - 1)))
+            t = threading.Thread(target=worker, args=(aid, model, key_i, min(try_timeout, remaining - 1)))
             t.daemon = True
             t.start()
             return True
@@ -461,13 +478,13 @@ def call_gemini(prompt, budget=None):
 
     launch()
     while in_flight:
-        wait = min(HEDGE_AFTER_SEC, max(0.05, end - time.time()))
+        wait = min(hedge_after, max(0.05, end - time.time()))
         try:
             aid, model, key_i, text, err = results.get(timeout=wait)
         except queue.Empty:
             if time.time() >= end:
                 break
-            if len(in_flight) < MAX_PARALLEL:
+            if len(in_flight) < max_parallel:
                 launch()  # slow answer: hedge with the next model
             continue
         in_flight.pop(aid, None)

@@ -480,7 +480,7 @@
       outLangLabel: "Language of the content pack",
       autoHint: "Auto = the language of the video or your text.",
       generate: "Generate Content Pack",
-      steps: ["Reading the video…", "Looking for subtitles and chapters…", "Writing the Telegram post, the article and 5 posts…"],
+      steps: ["Reading the video…", "Looking for subtitles and chapters…", "Gemini is watching the video…", "Writing the Telegram post, the article and 5 posts…"],
       needInput: "Paste a YouTube video link or some text / key points first.",
       errTitle: "Something went wrong",
       network: "Network error: ",
@@ -500,9 +500,10 @@
       srcChapters: "chapters",
       srcSubs: "subtitles",
       srcSubsBlocked: "subtitles blocked by YouTube",
+      srcVideoAi: "video watched by Gemini",
       srcNotes: "your text",
       watch: "Watch on YouTube",
-      w_subtitles_unavailable: "YouTube did not share the subtitles with our server, so the pack is based on the title, description, chapters and your text. For maximum accuracy, paste the transcript.",
+      w_subtitles_unavailable: "YouTube did not share the subtitles and Gemini could not watch this video, so the pack is based on the title, description and your text. For maximum accuracy, paste the transcript.",
       w_no_youtube_key: "The video description and chapters could not be read (YOUTUBE_API_KEY is not set), only the title was used.",
       w_youtube_api: "The YouTube Data API did not answer, so only the title was used.",
       w_thin_source: "There was little source text, so the pack is more general. Paste key points or a transcript for a more precise result.",
@@ -538,7 +539,7 @@
       outLangLabel: "Язык контент-пакета",
       autoHint: "Auto — язык видео или вашего текста.",
       generate: "Создать контент-пакет",
-      steps: ["Читаем видео…", "Ищем субтитры и таймкоды…", "Пишем пост для Telegram, статью и 5 постов…"],
+      steps: ["Читаем видео…", "Ищем субтитры и таймкоды…", "Gemini смотрит видео…", "Пишем пост для Telegram, статью и 5 постов…"],
       needInput: "Сначала вставьте ссылку на видео YouTube или текст / тезисы.",
       errTitle: "Что-то пошло не так",
       network: "Ошибка сети: ",
@@ -558,9 +559,10 @@
       srcChapters: "таймкоды",
       srcSubs: "субтитры",
       srcSubsBlocked: "субтитры заблокированы YouTube",
+      srcVideoAi: "видео просмотрено Gemini",
       srcNotes: "ваш текст",
       watch: "Смотреть на YouTube",
-      w_subtitles_unavailable: "YouTube не отдал субтитры нашему серверу, поэтому пакет собран по названию, описанию, таймкодам и вашему тексту. Для максимальной точности вставьте расшифровку.",
+      w_subtitles_unavailable: "YouTube не отдал субтитры, а Gemini не смог посмотреть это видео, поэтому пакет собран по названию, описанию и вашему тексту. Для максимальной точности вставьте расшифровку.",
       w_no_youtube_key: "Описание и таймкоды видео прочитать не удалось (не задан YOUTUBE_API_KEY), использовано только название.",
       w_youtube_api: "YouTube Data API не ответил, поэтому использовано только название.",
       w_thin_source: "Исходного текста было мало, поэтому пакет получился более общим. Вставьте тезисы или расшифровку для точного результата.",
@@ -596,7 +598,7 @@
       outLangLabel: "Мова контент-пакета",
       autoHint: "Auto — мова відео або вашого тексту.",
       generate: "Створити контент-пакет",
-      steps: ["Читаємо відео…", "Шукаємо субтитри й таймкоди…", "Пишемо пост для Telegram, статтю та 5 постів…"],
+      steps: ["Читаємо відео…", "Шукаємо субтитри й таймкоди…", "Gemini переглядає відео…", "Пишемо пост для Telegram, статтю та 5 постів…"],
       needInput: "Спершу вставте посилання на відео YouTube або текст / тези.",
       errTitle: "Щось пішло не так",
       network: "Помилка мережі: ",
@@ -616,9 +618,10 @@
       srcChapters: "таймкоди",
       srcSubs: "субтитри",
       srcSubsBlocked: "субтитри заблоковано YouTube",
+      srcVideoAi: "відео переглянуто Gemini",
       srcNotes: "ваш текст",
       watch: "Дивитися на YouTube",
-      w_subtitles_unavailable: "YouTube не віддав субтитри нашому серверу, тому пакет зібрано за назвою, описом, таймкодами та вашим текстом. Для максимальної точності вставте розшифровку.",
+      w_subtitles_unavailable: "YouTube не віддав субтитри, а Gemini не зміг переглянути це відео, тому пакет зібрано за назвою, описом і вашим текстом. Для максимальної точності вставте розшифровку.",
       w_no_youtube_key: "Опис і таймкоди відео прочитати не вдалося (не задано YOUTUBE_API_KEY), використано лише назву.",
       w_youtube_api: "YouTube Data API не відповів, тому використано лише назву.",
       w_thin_source: "Вихідного тексту було мало, тому пакет вийшов загальнішим. Вставте тези або розшифровку для точного результату.",
@@ -695,7 +698,7 @@
   function startSteps() {
     curStep = 0; renderSteps();
     if (stepTimer) clearInterval(stepTimer);
-    stepTimer = setInterval(function () { if (curStep < t("steps").length - 1) { curStep++; renderSteps(); } }, 3500);
+    stepTimer = setInterval(function () { if (curStep < t("steps").length - 1) { curStep++; renderSteps(); } }, 6000);
   }
   function stopSteps() { if (stepTimer) { clearInterval(stepTimer); stepTimer = null; } }
 
@@ -778,7 +781,8 @@
       if (s.description) badges.push("✓ " + t("srcDesc"));
       if (s.chapters) badges.push("✓ " + t("srcChapters") + ": " + s.chapters);
       if (s.subtitles === "manual" || s.subtitles === "auto") badges.push("✓ " + t("srcSubs"));
-      if (s.subtitles === "blocked") badges.push("✕ " + t("srcSubsBlocked"));
+      if (s.video_ai === "watched") badges.push("✓ " + t("srcVideoAi"));
+      else if (s.subtitles === "blocked") badges.push("✕ " + t("srcSubsBlocked"));
       if (s.notes) badges.push("✓ " + t("srcNotes"));
       vc.innerHTML =
         '<a class="vthumb" href="' + escapeHtml(v.url) + '" target="_blank" rel="noopener"><img src="' + escapeHtml(v.thumbnail) + '" alt="" loading="lazy" /></a>' +
