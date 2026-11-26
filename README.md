@@ -1,4 +1,14 @@
-# NicheRadar AI
+# Creator Studio AI — NicheRadar AI + Thumbnail & Title Lab
+
+Two free tools for YouTube creators on one site, with a shared header and tool switcher:
+
+| Tool | URL | What it does |
+| --- | --- | --- |
+| **NicheRadar AI** | `/` | Niche, Top 5 competitors and 10 viral video ideas for any channel |
+| **Thumbnail & Title Lab** | `/thumbnails` | 3 ready 16:9 thumbnails (PNG 1280×720) + 6 A/B titles with CTR score |
+
+Both tools use the shared Gemini client `api/_gemini.py` (key carousel, hedged fast timeouts)
+and the same UI language switch (EN default / RU / UA, remembered between pages).
 
 **NicheRadar AI** is a free tool that tells any YouTube creator their exact niche,
 reveals their **Top 5 competitors**, and generates **10 clickable viral video ideas** —
@@ -94,6 +104,37 @@ That's it — visit the deployed site, paste a YouTube link, and analyze.
 
 ---
 
+## Thumbnail & Title Lab (`/thumbnails`)
+
+1. Enter the video topic or a draft title (or click one of 3 examples), optionally a niche,
+   pick the language of the titles / thumbnail text (EN / RU / UA) and optionally upload your
+   photo or selfie (it never leaves the device).
+2. `api/thumbnails.py` asks Gemini (via `api/_gemini.py`) for strictly validated JSON:
+   **3 thumbnail concepts** (`angle_name`, `overlay_text` 2–4 words, `accent_color` HEX,
+   English `image_prompt` for a text-free background, `ctr_tip`) and **6 titles**
+   (`title` 45–80 chars, `ctr_score` 82–97, `trigger`). Every field is re-checked on the
+   server (word count, punctuation, HEX, score range, length, language purity: no Cyrillic in
+   EN, no ы/э/ъ/ё in UA, no і/ї/є/ґ in RU); anything that fails is replaced by a template.
+   If Gemini is overloaded the tool still answers with templates (`"ai": "fallback"`).
+3. The browser renders each thumbnail on an HTML5 canvas at 1280×720: AI background from the
+   free `https://image.pollinations.ai/prompt/...?width=1280&height=720&nologo=true&seed=...`
+   endpoint (loaded one by one because of the free rate limit; a gradient background is shown
+   until it arrives or if it fails), dark vignette, your portrait on the side, and the big
+   headline in Montserrat 900 with outline and an accent plate — so Cyrillic and the Ukrainian
+   letters і ї є ґ are always perfect. Each card has **Download PNG (1280×720)**, editable text
+   and **New background**. The 6 titles are shown as A/B cards with CTR bar, trigger and **Copy**.
+
+`POST /api/thumbnails`
+
+```json
+{ "topic": "I fixed a dead washing machine for $5", "niche": "DIY repair", "lang": "en" }
+```
+
+Response: `{"success": true, "concepts": [3 × {...}], "titles": [6 × {...}], "ai": "gemini|mixed|fallback", "lang": "en"}`.
+Missing `GEMINI_API_KEY` → `{"success": false, "error": "...", "setup": {"title": "...", "steps": [...]}}`.
+
+---
+
 ## API
 
 `POST /api/analyze`
@@ -145,7 +186,8 @@ python3 -c "import api.analyze as a; print(a.analyze('https://www.youtube.com/@M
 - **KoShorts AI Studio** — [https://koshorts.vercel.app](https://koshorts.vercel.app) — cut
   YouTube Shorts from any link.
 - **CreatorDirectory** — [https://creator-directory-chi.vercel.app](https://creator-directory-chi.vercel.app)
-  — a catalog of 60+ tools for creators.
+  — a catalog of 65+ tools for creators.
+- **Telegram bot** — [@remtex_shorts_ai_bot](https://t.me/remtex_shorts_ai_bot).
 
 ---
 
@@ -153,10 +195,15 @@ python3 -c "import api.analyze as a; print(a.analyze('https://www.youtube.com/@M
 
 ```
 .
-├── index.html          # Static frontend (dark theme, EN/RU/UA, open report)
+├── index.html          # NicheRadar AI (dark theme, EN/RU/UA, open report)
+├── thumbnails.html     # Thumbnail & Title Lab (canvas thumbnails, A/B titles), served at /thumbnails
 ├── api/
-│   └── analyze.py      # Vercel Serverless Function (stdlib only)
-├── vercel.json         # Function config + rewrites + headers
+│   ├── _gemini.py      # Shared Gemini client (key carousel, hedging) — not an endpoint
+│   ├── analyze.py      # POST /api/analyze    (stdlib only)
+│   └── thumbnails.py   # POST /api/thumbnails (stdlib only)
+├── favicon.*, apple-touch-icon.png
+├── preview_server.py   # Local preview with mock APIs (python3 preview_server.py)
+├── vercel.json         # Function config + /thumbnails rewrite + headers
 ├── requirements.txt    # Empty — standard library only
 └── README.md
 ```
