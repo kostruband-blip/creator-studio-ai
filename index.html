@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NicheRadar AI — Find Your Niche & Top YouTube Competitors</title>
+<meta name="description" content="NicheRadar AI analyzes any YouTube channel, defines its niche, and reveals the Top 5 competitors plus 10 viral video ideas." />
+<style>
+  :root {
+    --bg: #070a11;
+    --bg2: #0c1018;
+    --card: #131926;
+    --card2: #1a2233;
+    --border: #243047;
+    --text: #f4f7fc;
+    --muted: #aeb9c9;
+    --accent: #7c5cff;
+    --accent2: #19c8ff;
+    --good: #36d399;
+    --warn: #ffb020;
+    --grad: linear-gradient(135deg, #7c5cff 0%, #19c8ff 100%);
+    --radius: 18px;
+    --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    background:
+      radial-gradient(1100px 600px at 80% -10%, rgba(124, 92, 255, 0.18), transparent 60%),
+      radial-gradient(900px 500px at -10% 10%, rgba(25, 200, 255, 0.12), transparent 55%),
+      var(--bg);
+    color: var(--text);
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: inherit; text-decoration: none; }
+
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 0 16px 64px;
+    width: 100%;
+  }
+
+  /* ---------- Header ---------- */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 18px 16px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 800;
+    font-size: 20px;
+    letter-spacing: -0.02em;
+  }
+  .brand .logo {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: var(--grad);
+    display: grid; place-items: center;
+    font-size: 18px; box-shadow: 0 6px 18px rgba(124, 92, 255, 0.5);
+  }
+  .brand span.grad {
+    background: var(--grad);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .nav {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .eco {
+    display: flex; flex-direction: column; line-height: 1.15;
+    padding: 6px 12px; border: 1px solid var(--border); border-radius: 12px;
+    background: var(--card); transition: border-color .2s, transform .2s;
+  }
+  .eco:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .eco b { font-size: 13px; }
+  .eco small { color: var(--muted); font-size: 11px; }
+
+  .lang-switch { display: flex; gap: 4px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 4px; }
+  .lang-switch button {
+    border: 0; background: transparent; color: var(--muted);
+    font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 9px; cursor: pointer;
+    transition: all .15s;
+  }
+  .lang-switch button.active { background: var(--grad); color: #fff; }
+
+  /* ---------- Hero ---------- */
+  .hero { text-align: center; padding: 26px 0 8px; }
+  .hero h1 {
+    font-size: clamp(26px, 6vw, 46px);
+    line-height: 1.12; margin: 0 0 10px; letter-spacing: -0.03em; font-weight: 800;
+  }
+  .hero h1 .grad { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero p.sub { color: var(--muted); font-size: clamp(14px, 3vw, 17px); margin: 0 auto; max-width: 540px; }
+
+  /* ---------- Search box (1 screen — 1 window) ---------- */
+  .search-box {
+    margin: 26px auto 0;
+    background: linear-gradient(180deg, var(--card), var(--bg2));
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    box-shadow: var(--shadow);
+  }
+  .input-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  #urlInput {
+    flex: 1 1 240px; min-width: 0;
+    background: #0a0e16; border: 1px solid var(--border); color: var(--text);
+    border-radius: 13px; padding: 15px 16px; font-size: 16px; outline: none;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  #urlInput:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(124, 92, 255, 0.22); }
+  #analyzeBtn {
+    flex: 0 0 auto;
+    border: 0; cursor: pointer; color: #fff; font-weight: 800; font-size: 15px;
+    background: var(--grad); border-radius: 13px; padding: 15px 20px;
+    box-shadow: 0 10px 26px rgba(124, 92, 255, 0.45); transition: transform .15s, opacity .2s;
+    white-space: nowrap;
+  }
+  #analyzeBtn:hover { transform: translateY(-1px); }
+  #analyzeBtn:disabled { opacity: .6; cursor: progress; transform: none; }
+
+  .examples { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .examples .label { color: var(--muted); font-size: 13px; }
+  .chip {
+    border: 1px solid var(--border); background: var(--card2); color: var(--muted);
+    border-radius: 999px; padding: 6px 12px; font-size: 12.5px; cursor: pointer;
+    transition: all .15s; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .chip:hover { color: var(--text); border-color: var(--accent2); }
+
+  /* ---------- Status / stepper ---------- */
+  .status {
+    margin-top: 22px; text-align: center;
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px;
+  }
+  .spinner {
+    width: 40px; height: 40px; margin: 0 auto 16px; border-radius: 50%;
+    border: 4px solid rgba(124, 92, 255, 0.25); border-top-color: var(--accent);
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .steps { list-style: none; padding: 0; margin: 0 auto; max-width: 360px; text-align: left; }
+  .steps li { display: flex; align-items: center; gap: 10px; padding: 7px 0; color: var(--muted); font-size: 15px; transition: color .2s; }
+  .steps li .dot { width: 20px; text-align: center; font-weight: 800; }
+  .steps li.active { color: var(--text); }
+  .steps li.active .dot { color: var(--accent2); animation: pulse 1s ease-in-out infinite; }
+  .steps li.done { color: var(--good); }
+  .steps li.done .dot { color: var(--good); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+  /* ---------- Results ---------- */
+  .results { margin-top: 26px; display: flex; flex-direction: column; gap: 26px; }
+  .section-title { font-size: 20px; font-weight: 800; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+  .section-title .badge { font-size: 11px; font-weight: 700; color: #fff; background: var(--grad); padding: 3px 9px; border-radius: 999px; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px;
+  }
+
+  /* niche card */
+  .niche-card { display: flex; gap: 16px; align-items: center; }
+  .niche-card img.avatar { width: 64px; height: 64px; border-radius: 14px; object-fit: cover; border: 2px solid var(--border); flex: 0 0 auto; }
+  .niche-card .meta { min-width: 0; }
+  .niche-card h3 { margin: 0 0 4px; font-size: 18px; word-break: break-word; }
+  .niche-card .niche-pill {
+    display: inline-block; margin-top: 6px; background: rgba(124, 92, 255, 0.16);
+    border: 1px solid rgba(124, 92, 255, 0.4); color: #d9ccff; font-weight: 700;
+    padding: 6px 12px; border-radius: 999px; font-size: 14px;
+  }
+  .niche-card .counts { color: var(--muted); font-size: 13px; margin-top: 8px; display: flex; gap: 14px; flex-wrap: wrap; }
+
+  .grid { display: grid; gap: 12px; }
+  .competitors .grid { grid-template-columns: repeat(2, 1fr); }
+  .ideas .grid { grid-template-columns: 1fr; }
+
+  .comp {
+    display: flex; gap: 12px; align-items: center; transition: border-color .2s, transform .15s;
+  }
+  .comp:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .comp img { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border); flex: 0 0 auto; }
+  .comp .c-body { min-width: 0; flex: 1; }
+  .comp h4 { margin: 0 0 3px; font-size: 14.5px; word-break: break-word; }
+  .comp .stats { display: flex; gap: 12px; font-size: 12px; color: var(--muted); }
+  .comp .stats b { color: var(--text); }
+  .comp .best { font-size: 12px; color: var(--muted); margin-top: 5px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+  .comp .best a { color: var(--accent2); }
+
+  .idea { display: flex; gap: 12px; align-items: flex-start; }
+  .idea .num {
+    flex: 0 0 auto; width: 28px; height: 28px; border-radius: 8px; background: var(--grad);
+    color: #fff; font-weight: 800; font-size: 13px; display: grid; place-items: center;
+  }
+  .idea h4 { margin: 0 0 3px; font-size: 15px; }
+  .idea p { margin: 0; color: var(--muted); font-size: 13.5px; }
+
+  .tag-free { font-size: 10px; font-weight: 800; color: var(--good); border: 1px solid var(--good); border-radius: 999px; padding: 1px 7px; text-transform: uppercase; letter-spacing: .04em; }
+
+  /* locked group */
+  .locked-group { position: relative; }
+  .locked-cards { filter: blur(6px); opacity: .5; pointer-events: none; user-select: none; }
+  .lock-overlay {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center; gap: 12px;
+    background: rgba(8, 11, 18, 0.38); border-radius: 14px; padding: 18px;
+  }
+  .lock-overlay .lock { font-size: 30px; }
+  .lock-overlay h4 { margin: 0; font-size: 17px; }
+  .lock-overlay p { margin: 0; color: var(--muted); font-size: 13.5px; max-width: 340px; }
+  .unlock-btn {
+    margin-top: 4px; border: 0; cursor: pointer; color: #fff; font-weight: 800; font-size: 14px;
+    background: var(--grad); border-radius: 12px; padding: 13px 18px;
+    box-shadow: 0 10px 26px rgba(124, 92, 255, 0.5); transition: transform .15s;
+    text-decoration: none; display: inline-block;
+  }
+  .unlock-btn:hover { transform: translateY(-1px); }
+
+  /* error */
+  .error-box {
+    margin-top: 22px; background: rgba(255, 90, 90, 0.08); border: 1px solid rgba(255, 90, 90, 0.4);
+    border-radius: var(--radius); padding: 20px;
+  }
+  .error-box h3 { margin: 0 0 8px; color: #ff9a9a; }
+  .error-box p { margin: 0; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+  .error-box ol { margin: 10px 0 0; padding-left: 20px; color: var(--muted); }
+  .error-box code { background: #0a0e16; padding: 1px 6px; border-radius: 6px; color: var(--accent2); }
+
+  .hidden { display: none !important; }
+
+  /* ---------- Footer ---------- */
+  footer {
+    max-width: 1100px; margin: 40px auto 0; padding: 22px 16px; border-top: 1px solid var(--border);
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px;
+    color: var(--muted); font-size: 13px;
+  }
+  footer .links { display: flex; gap: 16px; flex-wrap: wrap; }
+  footer a.link { color: var(--text); border-bottom: 1px dashed var(--border); padding-bottom: 1px; }
+  footer a.link:hover { border-color: var(--accent2); }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 560px) {
+    .competitors .grid { grid-template-columns: 1fr; }
+    .hero { padding-top: 10px; }
+    .input-row { flex-direction: column; }
+    #analyzeBtn { width: 100%; }
+    .brand { font-size: 18px; }
+    .eco small { display: none; }
+    .eco b { font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="logo">◎</span>
+    <span>Niche<span class="grad">Radar</span> AI</span>
+  </div>
+  <nav class="nav">
+    <a class="eco" href="https://koshorts.vercel.app" target="_blank" rel="noopener">
+      <b id="eco1">KoShorts AI Studio</b>
+      <small id="eco1desc">Cut Shorts from any YouTube link</small>
+    </a>
+    <a class="eco" href="https://creator-directory-chi.vercel.app" target="_blank" rel="noopener">
+      <b id="eco2">CreatorDirectory</b>
+      <small id="eco2desc">Catalog of 60+ tools for creators</small>
+    </a>
+    <div class="lang-switch" id="langSwitch">
+      <button data-lang="en" class="active">EN</button>
+      <button data-lang="ru">RU</button>
+      <button data-lang="ua">UA</button>
+    </div>
+  </nav>
+</header>
+
+<div class="wrap">
+  <section class="hero">
+    <h1><span class="grad">NicheRadar AI</span><br /><span id="tagline">Find your niche and top competitors on YouTube</span></h1>
+    <p class="sub" id="subtagline">Paste your channel or video link and get a full competitor report in seconds.</p>
+  </section>
+
+  <section class="search-box">
+    <div class="input-row">
+      <input id="urlInput" type="text" inputmode="url" autocomplete="off"
+             placeholder="Paste your YouTube channel or video link…" />
+      <button id="analyzeBtn">Analyze Channel &amp; Find Top 5 Competitors</button>
+    </div>
+    <div class="examples">
+      <span class="label" id="examplesLabel">Try a demo:</span>
+      <span class="chip" data-url="https://www.youtube.com/@MrBeast">@MrBeast</span>
+      <span class="chip" data-url="https://www.youtube.com/@Fireship">@Fireship</span>
+      <span class="chip" data-url="https://www.youtube.com/watch?v=dQw4w9WgXcQ">Any video link</span>
+    </div>
+  </section>
+
+  <section class="status hidden" id="status">
+    <div class="spinner"></div>
+    <ul class="steps" id="steps"></ul>
+  </section>
+
+  <section class="error-box hidden" id="error">
+    <h3 id="errorTitle">Setup needed</h3>
+    <p id="errorMsg"></p>
+    <ol id="errorSteps" class="hidden"></ol>
+  </section>
+
+  <section class="results hidden" id="results">
+    <!-- niche -->
+    <div>
+      <h2 class="section-title" id="nicheTitle">Your Channel Niche</h2>
+      <div class="card niche-card" id="nicheCard"></div>
+    </div>
+
+    <!-- competitors -->
+    <div class="competitors">
+      <h2 class="section-title" id="competitorsTitle">Top 5 Competitors</h2>
+      <div class="grid" id="competitorsFree"></div>
+      <div class="locked-group" id="competitorsLockedWrap">
+        <div class="grid locked-cards" id="competitorsLocked"></div>
+        <div class="lock-overlay">
+          <div class="lock">🔒</div>
+          <h4 id="lockedCompTitle">Unlock the complete report</h4>
+          <p id="lockedCompText">See all 5 competitors with full stats and 10 clickable video ideas.</p>
+          <a class="unlock-btn" id="unlockCompBtn" href="https://t.me" target="_blank" rel="noopener">Unlock All 5 Competitors &amp; 10 Video Ideas in Telegram →</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ideas -->
+    <div class="ideas">
+      <h2 class="section-title" id="ideasTitle">10 Viral Video Ideas for You</h2>
+      <div class="grid" id="ideasFree"></div>
+      <div class="locked-group" id="ideasLockedWrap">
+        <div class="grid locked-cards" id="ideasLocked"></div>
+        <div class="lock-overlay">
+          <div class="lock">🔒</div>
+          <h4 id="lockedIdeaTitle">Unlock the complete report</h4>
+          <p id="lockedIdeaText">Get all 10 viral video ideas tailored to your niche.</p>
+          <a class="unlock-btn" id="unlockIdeaBtn" href="https://t.me" target="_blank" rel="noopener">Unlock All 5 Competitors &amp; 10 Video Ideas in Telegram →</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<footer>
+  <span id="footerNote">Free analysis · Full report in our Telegram bot</span>
+  <div class="links">
+    <a class="link" href="https://koshorts.vercel.app" target="_blank" rel="noopener" id="fEco1">KoShorts AI Studio</a>
+    <a class="link" href="https://creator-directory-chi.vercel.app" target="_blank" rel="noopener" id="fEco2">CreatorDirectory</a>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var I18N = {
+    en: {
+      tagline: "Find your niche and top competitors on YouTube",
+      subtagline: "Paste your channel or video link and get a full competitor report in seconds.",
+      inputPlaceholder: "Paste your YouTube channel or video link…",
+      examples: "Try a demo:",
+      analyze: "Analyze Channel & Find Top 5 Competitors",
+      steps: ["Studying your channel…", "Finding 5 competitors…", "Analyzing viral videos…"],
+      nicheTitle: "Your Channel Niche",
+      competitorsTitle: "Top 5 Competitors",
+      ideasTitle: "10 Viral Video Ideas for You",
+      subscribers: "Subscribers",
+      views: "Views",
+      bestVideo: "Best video",
+      lockedTitle: "Unlock the complete report",
+      lockedCompText: "See all 5 competitors with full stats and 10 clickable video ideas.",
+      lockedIdeaText: "Get all 10 viral video ideas tailored to your niche.",
+      unlockBtn: "Unlock All 5 Competitors & 10 Video Ideas in Telegram →",
+      footerNote: "Free analysis · Full report in our Telegram bot",
+      errTitle: "Setup needed",
+      eco1: "KoShorts AI Studio",
+      eco1desc: "Cut Shorts from any YouTube link",
+      eco2: "CreatorDirectory",
+      eco2desc: "Catalog of 60+ tools for creators"
+    },
+    ru: {
+      tagline: "Найдите свою нишу и топ конкурентов на YouTube",
+      subtagline: "Вставьте ссылку на канал или видео и получите полный отчёт о конкурентах за секунды.",
+      inputPlaceholder: "Вставьте ссылку на свой YouTube-канал или видео…",
+      examples: "Попробуйте демо:",
+      analyze: "Анализировать канал и найти топ-5 конкурентов",
+      steps: ["Изучаем ваш канал…", "Ищем 5 конкурентов…", "Анализируем вирусные видео…"],
+      nicheTitle: "Ниша вашего канала",
+      competitorsTitle: "Топ-5 конкурентов",
+      ideasTitle: "10 вирусных идей для вас",
+      subscribers: "Подписчики",
+      views: "Просмотры",
+      bestVideo: "Лучшее видео",
+      lockedTitle: "Откройте полный отчёт",
+      lockedCompText: "Все 5 конкурентов с полной статистикой и 10 кликабельных идей видео.",
+      lockedIdeaText: "Получите все 10 вирусных идей под вашу нишу.",
+      unlockBtn: "Открыть всех 5 конкурентов и 10 идей видео в Telegram →",
+      footerNote: "Бесплатный анализ · Полный отчёт в нашем Telegram-боте",
+      errTitle: "Требуется настройка",
+      eco1: "KoShorts AI Studio",
+      eco1desc: "Нарезка Shorts из любой YouTube-ссылки",
+      eco2: "CreatorDirectory",
+      eco2desc: "Каталог 60+ инструментов для блогеров"
+    },
+    ua: {
+      tagline: "Знайдіть свою нішу та топ конкурентів на YouTube",
+      subtagline: "Вставте посилання на канал або відео і отримайте повний звіт про конкурентів за секунди.",
+      inputPlaceholder: "Вставте посилання на свій YouTube-канал або відео…",
+      examples: "Спробуйте демо:",
+      analyze: "Проаналізувати канал і знайти топ-5 конкурентів",
+      steps: ["Вивчаємо ваш канал…", "Шукаємо 5 конкурентів…", "Аналізуємо вірусні відео…"],
+      nicheTitle: "Ніша вашого каналу",
+      competitorsTitle: "Топ-5 конкурентів",
+      ideasTitle: "10 вірусних ідей для вас",
+      subscribers: "Підписники",
+      views: "Перегляди",
+      bestVideo: "Найкраще відео",
+      lockedTitle: "Відкрийте повний звіт",
+      lockedCompText: "Усі 5 конкурентів з повною статистикою та 10 клікабельних ідей відео.",
+      lockedIdeaText: "Отримайте всі 10 вірусних ідей під вашу нішу.",
+      unlockBtn: "Відкрити всіх 5 конкурентів і 10 ідей відео в Telegram →",
+      footerNote: "Безкоштовний аналіз · Повний звіт у нашому Telegram-боті",
+      errTitle: "Потрібне налаштування",
+      eco1: "KoShorts AI Studio",
+      eco1desc: "Нарізка Shorts з будь-якого посилання YouTube",
+      eco2: "CreatorDirectory",
+      eco2desc: "Каталог 60+ інструментів для блогерів"
+    }
+  };
+
+  var lang = "en";
+
+  function t(key) {
+    var d = I18N[lang] || I18N.en;
+    return (key in d) ? d[key] : I18N.en[key];
+  }
+
+  function el(id) { return document.getElementById(id); }
+
+  function fmt(n) {
+    n = Number(n) || 0;
+    if (n >= 1e9) return (n / 1e9).toFixed(1).replace(/\.0$/, "") + "B";
+    if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M";
+    if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, "") + "K";
+    return String(n);
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  // ---------- Language application ----------
+  function applyLang() {
+    el("tagline").textContent = t("tagline");
+    el("subtagline").textContent = t("subtagline");
+    el("urlInput").placeholder = t("inputPlaceholder");
+    el("examplesLabel").textContent = t("examples");
+    el("analyzeBtn").textContent = t("analyze");
+    el("nicheTitle").textContent = t("nicheTitle");
+    el("competitorsTitle").textContent = t("competitorsTitle");
+    el("ideasTitle").textContent = t("ideasTitle");
+    el("lockedCompTitle").textContent = t("lockedTitle");
+    el("lockedCompText").textContent = t("lockedCompText");
+    el("lockedIdeaTitle").textContent = t("lockedTitle");
+    el("lockedIdeaText").textContent = t("lockedIdeaText");
+    el("unlockCompBtn").textContent = t("unlockBtn");
+    el("unlockIdeaBtn").textContent = t("unlockBtn");
+    el("footerNote").textContent = t("footerNote");
+    el("errorTitle").textContent = t("errTitle");
+    el("eco1").textContent = t("eco1");
+    el("eco1desc").textContent = t("eco1desc");
+    el("eco2").textContent = t("eco2");
+    el("eco2desc").textContent = t("eco2desc");
+    el("fEco1").textContent = t("eco1");
+    el("fEco2").textContent = t("eco2");
+    document.documentElement.lang = lang;
+
+    var btns = document.querySelectorAll("#langSwitch button");
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle("active", btns[i].getAttribute("data-lang") === lang);
+    }
+
+    // re-render stepper & results if visible (so language stays consistent)
+    if (!el("status").classList.contains("hidden")) renderSteps();
+    if (!el("results").classList.contains("hidden") && window.__lastData) {
+      renderResults(window.__lastData);
+    }
+  }
+
+  // ---------- Stepper ----------
+  var stepTimer = null;
+  var curStep = 0;
+
+  function renderSteps() {
+    var steps = t("steps");
+    var html = "";
+    for (var i = 0; i < steps.length; i++) {
+      var cls = i === 0 ? "active" : "pending";
+      var dot = i === 0 ? "●" : "○";
+      html += '<li id="st' + i + '" class="' + cls + '"><span class="dot">' + dot + '</span><span>' + escapeHtml(steps[i]) + "</span></li>";
+    }
+    el("steps").innerHTML = html;
+  }
+
+  function tickStep() {
+    var steps = t("steps");
+    curStep = (curStep + 1) % steps.length;
+    for (var i = 0; i < steps.length; i++) {
+      var li = el("st" + i);
+      if (!li) continue;
+      li.className = i < curStep ? "done" : (i === curStep ? "active" : "pending");
+      li.querySelector(".dot").textContent = i < curStep ? "✓" : (i === curStep ? "●" : "○");
+    }
+  }
+
+  function startSteps() {
+    renderSteps();
+    curStep = 0;
+    if (stepTimer) clearInterval(stepTimer);
+    stepTimer = setInterval(tickStep, 1600);
+  }
+  function stopSteps() {
+    if (stepTimer) { clearInterval(stepTimer); stepTimer = null; }
+  }
+
+  // ---------- UI visibility ----------
+  function showStatus() {
+    el("error").classList.add("hidden");
+    el("results").classList.add("hidden");
+    el("status").classList.remove("hidden");
+  }
+  function hideStatus() { el("status").classList.add("hidden"); }
+
+  function showError(data) {
+    hideStatus();
+    el("results").classList.add("hidden");
+    el("error").classList.remove("hidden");
+    el("errorMsg").textContent = data.error || "Unknown error.";
+    var ol = el("errorSteps");
+    if (data.setup && data.setup.steps && data.setup.steps.length) {
+      el("errorTitle").textContent = data.setup.title || t("errTitle");
+      var html = "";
+      for (var i = 0; i < data.setup.steps.length; i++) {
+        html += "<li>" + escapeHtml(data.setup.steps[i]) + "</li>";
+      }
+      ol.innerHTML = html;
+      ol.classList.remove("hidden");
+    } else {
+      ol.classList.add("hidden");
+    }
+  }
+
+  // ---------- Rendering results ----------
+  function compCard(c, locked) {
+    var html = '<a class="card comp" href="' + escapeHtml(c.url) + '" target="_blank" rel="noopener">';
+    html += '<img src="' + escapeHtml(c.avatar || "") + '" alt="" onerror="this.style.visibility=\'hidden\'">';
+    html += '<div class="c-body">';
+    html += "<h4>" + escapeHtml(c.title) + "</h4>";
+    html += '<div class="stats"><span>' + escapeHtml(t("subscribers")) + ": <b>" + fmt(c.subscribers) + "</b></span>";
+    html += "<span>" + escapeHtml(t("views")) + ": <b>" + fmt(c.views) + "</b></span></div>";
+    if (c.bestVideo && c.bestVideo.title) {
+      html += '<div class="best">' + escapeHtml(t("bestVideo")) + ': <a href="' + escapeHtml(c.bestVideo.url) + '" target="_blank" rel="noopener">' + escapeHtml(c.bestVideo.title) + "</a></div>";
+    }
+    html += "</div></a>";
+    return html;
+  }
+
+  function ideaCard(idea, idx) {
+    var html = '<div class="card idea">';
+    html += '<div class="num">' + (idx + 1) + "</div>";
+    html += "<div><h4>" + escapeHtml(idea.title) + "</h4>";
+    if (idea.topic) html += "<p>" + escapeHtml(idea.topic) + "</p>";
+    html += "</div></div>";
+    return html;
+  }
+
+  function renderResults(data) {
+    window.__lastData = data;
+    var ch = data.channel || {};
+    var competitors = data.competitors || [];
+    var ideas = data.ideas || [];
+
+    // niche card
+    var nicheHtml = "";
+    if (ch.avatar) nicheHtml += '<img class="avatar" src="' + escapeHtml(ch.avatar) + '" alt="" onerror="this.style.visibility=\'hidden\'">';
+    nicheHtml += '<div class="meta">';
+    nicheHtml += "<h3>" + escapeHtml(ch.title || "Your channel") + "</h3>";
+    nicheHtml += '<span class="niche-pill">' + escapeHtml(data.niche || "") + "</span>";
+    nicheHtml += '<div class="counts"><span>👥 ' + fmt(ch.subscribers) + " " + escapeHtml(t("subscribers")) + "</span>";
+    nicheHtml += "<span>▶ " + fmt(ch.views) + " " + escapeHtml(t("views")) + "</span></div>";
+    nicheHtml += "</div>";
+    el("nicheCard").innerHTML = nicheHtml;
+
+    // competitors: 2 free + 3 locked
+    var freeComp = competitors.slice(0, 2);
+    var lockedComp = competitors.slice(2, 5);
+    el("competitorsFree").innerHTML = freeComp.map(function (c) { return compCard(c, false); }).join("");
+    if (lockedComp.length) {
+      el("competitorsLockedWrap").classList.remove("hidden");
+      el("competitorsLocked").innerHTML = lockedComp.map(function (c) { return compCard(c, true); }).join("");
+    } else {
+      el("competitorsLockedWrap").classList.add("hidden");
+    }
+
+    // ideas: 3 free + 7 locked
+    var freeIdeas = ideas.slice(0, 3);
+    var lockedIdeas = ideas.slice(3, 10);
+    el("ideasFree").innerHTML = freeIdeas.map(function (it, i) { return ideaCard(it, i); }).join("");
+    if (lockedIdeas.length) {
+      el("ideasLockedWrap").classList.remove("hidden");
+      el("ideasLocked").innerHTML = lockedIdeas.map(function (it, i) { return ideaCard(it, i + 3); }).join("");
+    } else {
+      el("ideasLockedWrap").classList.add("hidden");
+    }
+
+    hideStatus();
+    el("error").classList.add("hidden");
+    el("results").classList.remove("hidden");
+    el("results").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // ---------- Analysis ----------
+  function analyze(url) {
+    if (!url) { el("urlInput").focus(); return; }
+    el("analyzeBtn").disabled = true;
+    showStatus();
+    startSteps();
+
+    fetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: url })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        stopSteps();
+        if (data && data.success) {
+          renderResults(data);
+        } else {
+          showError(data || { error: "Empty response." });
+        }
+      })
+      .catch(function (e) {
+        stopSteps();
+        showError({ error: "Network error: " + (e && e.message ? e.message : e) });
+      })
+      .finally(function () { el("analyzeBtn").disabled = false; });
+  }
+
+  // ---------- Events ----------
+  el("analyzeBtn").addEventListener("click", function () {
+    analyze(el("urlInput").value.trim());
+  });
+  el("urlInput").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") analyze(el("urlInput").value.trim());
+  });
+  var chips = document.querySelectorAll(".chip");
+  for (var i = 0; i < chips.length; i++) {
+    chips[i].addEventListener("click", function () {
+      var u = this.getAttribute("data-url");
+      el("urlInput").value = u;
+      analyze(u);
+    });
+  }
+  var langBtns = document.querySelectorAll("#langSwitch button");
+  for (var j = 0; j < langBtns.length; j++) {
+    langBtns[j].addEventListener("click", function () {
+      lang = this.getAttribute("data-lang");
+      applyLang();
+    });
+  }
+
+  // init
+  applyLang();
+})();
+</script>
+</body>
+</html>
