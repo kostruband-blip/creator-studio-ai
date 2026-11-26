@@ -681,6 +681,9 @@ def analyze(url):
 # ---------------------------------------------------------------------------
 
 
+from http.server import BaseHTTPRequestHandler  # noqa: E402
+
+
 def _send_json(handler, payload, status=200):
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     handler.send_response(status)
@@ -693,7 +696,7 @@ def _send_json(handler, payload, status=200):
     handler.wfile.write(body)
 
 
-class handler:  # noqa: N801 - required name for Vercel
+class handler(BaseHTTPRequestHandler):  # noqa: N801 - required name for Vercel
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
