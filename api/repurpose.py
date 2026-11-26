@@ -314,7 +314,9 @@ def fetch_transcript_proxy(video_id):
             body = ""
         raise RuntimeError("HTTP %d %s" % (e.code, body.strip()))
     except Exception as e:  # timeout / DNS / TLS / connection refused
-        raise RuntimeError("%s after %.1fs: %s" % (type(e).__name__, time.time() - started, str(e)[:100]))
+        why = getattr(e, "reason", None) or e  # URLError -> the real socket/DNS/TLS error
+        raise RuntimeError("%s after %.1fs: %s %s" % (type(e).__name__, time.time() - started,
+                                                     type(why).__name__, str(why)[:100]))
     try:
         data = json.loads(raw)
     except ValueError:
