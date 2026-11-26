@@ -18,14 +18,18 @@ Carousel rules
 * Keys (GEMINI_API_KEY, GEMINI_API_KEY_2, GEMINI_API_KEY_3) rotate too:
   every time the ring of models wraps around, the next key is used, so all
   model x key combinations are covered at most once per call.
-* One request waits at most GEMINI_TRY_TIMEOUT = 25 seconds.
+* One request waits at most GEMINI_TRY_TIMEOUT = 25 seconds; if a model has
+  not answered after HEDGE_AFTER_SEC, the next one starts in parallel
+  (max MAX_PARALLEL) and the first successful answer wins.
 * The model + key that answered last is tried FIRST on the next request.
 * 404 (model gone) removes the model from the list; 401/403 skips that key.
 """
 
 import json
 import os
+import queue
 import re
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -74,8 +78,11 @@ GEMINI_KEYS = [
 
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models/"
 
-GEMINI_TRY_TIMEOUT = 25    # seconds to wait for ONE model before switching
+GEMINI_TRY_TIMEOUT = 25    # seconds to wait for ONE model before giving up on it
 GEMINI_CALL_BUDGET = 55    # seconds for all attempts of one call_gemini()
+HEDGE_AFTER_SEC = 6        # no answer yet -> also start the next model in parallel
+MAX_PARALLEL = 3           # at most this many models in flight at once
+MIN_ATTEMPT_SEC = 6        # do not start a model with less time than this left
 REQUEST_BUDGET_SEC = 110   # whole API request (vercel.json maxDuration: 120)
 
 # State of a warm serverless instance.
@@ -390,13 +397,21 @@ def attempt_order(models, n_keys=None):
     return [(models[(sm + i) % m], (sk + i // m) % k) for i in range(m * k)]
 
 
-def call_gemini(prompt):
-    """Send a prompt through the model/key carousel. Returns the response text."""
+def call_gemini(prompt, budget=None):
+    """Send a prompt through the model/key carousel. Returns the response text.
+
+    Hedged carousel:
+    * error (503 / 429 / timeout / 5xx) -> the next model starts immediately;
+    * no answer after HEDGE_AFTER_SEC   -> the next model ALSO starts, in
+      parallel (max MAX_PARALLEL in flight), so one slow overloaded model
+      cannot eat the whole time budget;
+    * the first successful answer wins; each model waits <= GEMINI_TRY_TIMEOUT.
+    """
     if not GEMINI_KEYS:
         raise GeminiFail(False, "NO_KEYS")
 
     started = time.time()
-    end = started + GEMINI_CALL_BUDGET
+    end = started + (budget or GEMINI_CALL_BUDGET)
     if REQUEST["deadline"]:
         end = min(end, REQUEST["deadline"] - 4)
 
@@ -404,35 +419,80 @@ def call_gemini(prompt):
     if not models:
         raise GeminiFail(False, "Gemini returned no text models for these keys.", 0, "model")
 
+    pending = list(attempt_order(models))
+    results = queue.Queue()
     dead_models, dead_keys = set(), set()
-    errors = []  # (model, key_index, GeminiFail)
+    errors = []      # (model, key_index, GeminiFail)
+    in_flight = {}   # attempt id -> (model, key_index)
+    next_id = [0]
 
-    for model, key_i in attempt_order(models):
-        if model in dead_models or key_i in dead_keys:
-            continue
-        remaining = end - time.time()
-        if remaining < 6:  # not enough time for a meaningful attempt
-            break
+    def worker(aid, model, key_i, timeout):
         try:
-            text = _try_once(model, GEMINI_KEYS[key_i], prompt,
-                             timeout=min(GEMINI_TRY_TIMEOUT, remaining - 1))
+            results.put((aid, model, key_i, _try_once(model, GEMINI_KEYS[key_i], prompt, timeout), None))
         except GeminiFail as e:
-            errors.append((model, key_i, e))
-            if e.kind == "model":
-                dead_models.add(model)
-                if e.code == 404:
-                    _drop_model(model)
-            elif e.kind == "key":
-                dead_keys.add(key_i)
-            elif not e.retryable:
-                raise
-            # 503 / 429 / timeout: switch to the next model immediately.
-            if len(dead_keys) == len(GEMINI_KEYS) or len(dead_models) == len(models):
-                break
-            continue
-        STATE.update(model=model, key_i=key_i)
-        return text
+            results.put((aid, model, key_i, None, e))
+        except Exception as e:  # never let a thread die silently
+            results.put((aid, model, key_i, None, GeminiFail(True, str(e)[:200], 0, "transient")))
 
+    def launch():
+        """Start the next useful (model, key) pair. False if none can start."""
+        while pending:
+            model, key_i = pending.pop(0)
+            if model in dead_models or key_i in dead_keys:
+                continue
+            busy = {m for m, _ in in_flight.values()}
+            if model in busy:  # same model already running with another key
+                pending.append((model, key_i))
+                if all(m in busy or m in dead_models or k in dead_keys for m, k in pending):
+                    return False
+                continue
+            remaining = end - time.time()
+            if remaining < MIN_ATTEMPT_SEC:
+                pending.clear()
+                return False
+            aid = next_id[0]
+            next_id[0] += 1
+            in_flight[aid] = (model, key_i)
+            t = threading.Thread(target=worker, args=(aid, model, key_i, min(GEMINI_TRY_TIMEOUT, remaining - 1)))
+            t.daemon = True
+            t.start()
+            return True
+        return False
+
+    launch()
+    while in_flight:
+        wait = min(HEDGE_AFTER_SEC, max(0.05, end - time.time()))
+        try:
+            aid, model, key_i, text, err = results.get(timeout=wait)
+        except queue.Empty:
+            if time.time() >= end:
+                break
+            if len(in_flight) < MAX_PARALLEL:
+                launch()  # slow answer: hedge with the next model
+            continue
+        in_flight.pop(aid, None)
+        if err is None:
+            STATE.update(model=model, key_i=key_i)
+            return text
+        errors.append((model, key_i, err))
+        if err.kind == "model":
+            dead_models.add(model)
+            if err.code == 404:
+                _drop_model(model)
+        elif err.kind == "key":
+            dead_keys.add(key_i)
+        elif not err.retryable:
+            raise err
+        if len(dead_keys) == len(GEMINI_KEYS) or len(dead_models) == len(models):
+            break
+        # 503 / 429 / timeout: switch to the next model immediately.
+        launch()
+        if not in_flight and pending:
+            launch()
+
+    if not errors and in_flight:
+        errors.append((in_flight[next(iter(in_flight))][0], 0,
+                       GeminiFail(True, "no answer within the time budget (timeout)", 0, "transient")))
     raise GeminiFail(False, _summarize(errors), 0, _dominant_kind(errors))
 
 
@@ -462,7 +522,8 @@ def _summarize(errors):
     }.get(kind, "Gemini request failed.")
     sample = next((e.message for _, _, e in errors if e.kind == kind), errors[-1][2].message)
     tried = " -> ".join(m for m, _, _ in errors[:8]) + (" ..." if len(errors) > 8 else "")
-    return "%s Attempts: %d (%s). Google says: %s" % (head, len(errors), tried, sample[:240])
+    return "%s Attempts: %d (%s). Models in carousel: %d (%s). Google says: %s" % (
+        head, len(errors), tried, len(MODELS["list"]), MODELS["source"] or "?", sample[:220])
 
 
 def diagnostics(refresh=True):

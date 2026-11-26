@@ -18,7 +18,11 @@ right on the page.
     then the other discovered text models; if the list request fails, that preferred list is used (env `GEMINI_MODELS` = hard override);
   - on **503 / 429 / timeout** the same model is **not** retried — the **next model** is used immediately;
   - keys `GEMINI_API_KEY` → `_2` → `_3` rotate each time the model ring wraps, so every model × key pair is tried once;
-  - one request waits at most **25 s**; the model + key that answered last is tried **first** next time;
+  - one request waits at most **25 s**; if a model has not answered after **6 s**, the next model also starts **in parallel**
+    (max 3 at once) and the first successful answer wins; the model + key that answered last is tried **first** next time;
+  - if Gemini is overloaded (503 / 429) for the whole budget, the report is still returned, built from **YouTube data only**:
+    niche from title keywords, ideas = competitors' viral videos (`"ai": {"niche": "fallback", "ideas": "fallback"}`),
+    and the page shows a notice. Key errors are still reported so they can be fixed;
   - `404` (model retired) removes it from the ring, `401/403` skips that key.
   Carousel state: **`/api/analyze?models=1`** (keys are never shown).
 
