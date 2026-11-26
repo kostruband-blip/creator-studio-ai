@@ -227,6 +227,7 @@
   .tip { color: var(--muted); font-size: 13.5px; margin: 0; }
   .ov-edit label { display: block; font-size: 12px; color: var(--muted); font-weight: 700; margin-bottom: 4px; }
   .ov-edit input { width: 100%; background: #0a0e16; border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 9px 11px; font-size: 15px; font-weight: 700; }
+  .ov-hint { margin: 4px 0 0; font-size: 11.5px; color: var(--muted); }
   .ov-edit input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.22); }
   .bg-state { font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; min-height: 18px; }
   .bg-state .mini { width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(124, 92, 255, 0.3); border-top-color: var(--accent2); animation: spin .8s linear infinite; flex: 0 0 auto; }
@@ -470,7 +471,10 @@
       newBg: "New background",
       bgLoading: "Drawing the AI background…",
       bgOk: "AI background ready.",
-      bgFail: "AI image service did not answer, a gradient background is used. Try “New background”.",
+      bgFail: "AI image service did not answer, a studio background is used. Try “New background”.",
+      bgHf: "Drawing the AI background (Hugging Face)…",
+      hlHint: "Tip: wrap a word in *asterisks* to paint it in the accent colour.",
+      badgeLabel: "Sticker text",
       bgQueued: "Waiting in line for the AI background…",
       bgWait: "AI background in ~{s} s (the free image service draws 1 picture every 45 seconds).",
       bgTemp: "Temporary background from variant A.",
@@ -478,7 +482,7 @@
       copied: "Copied ✓",
       chars: "chars",
       ctr: "CTR",
-      dlFail: "The AI background blocked the download, so the PNG was saved with a gradient background.",
+      dlFail: "The AI background blocked the download, so the PNG was saved with a studio background.",
       footerNote: "Free · No sign-up · Thumbnails are rendered in your browser",
       tgOpen: "Open in Telegram",
       eco1desc: "Cut Shorts from any YouTube link",
@@ -524,7 +528,10 @@
       newBg: "Новый фон",
       bgLoading: "Рисуем ИИ-фон…",
       bgOk: "ИИ-фон готов.",
-      bgFail: "Сервис ИИ-картинок не ответил, используется градиентный фон. Нажмите «Новый фон».",
+      bgFail: "Сервис ИИ-картинок не ответил, используется студийный фон. Нажмите «Новый фон».",
+      bgHf: "Рисуем ИИ-фон (Hugging Face)…",
+      hlHint: "Совет: возьмите слово в *звёздочки*, чтобы выделить его цветом.",
+      badgeLabel: "Текст стикера",
       bgQueued: "Ждём очереди на ИИ-фон…",
       bgWait: "ИИ-фон через ~{s} с (бесплатный сервис рисует 1 картинку раз в 45 секунд).",
       bgTemp: "Временный фон от первой обложки.",
@@ -532,7 +539,7 @@
       copied: "Скопировано ✓",
       chars: "симв.",
       ctr: "CTR",
-      dlFail: "ИИ-фон запретил скачивание, поэтому PNG сохранён с градиентным фоном.",
+      dlFail: "ИИ-фон запретил скачивание, поэтому PNG сохранён со студийным фоном.",
       footerNote: "Бесплатно · Без регистрации · Обложки создаются в вашем браузере",
       tgOpen: "Открыть в Telegram",
       eco1desc: "Нарезка Shorts из любой YouTube-ссылки",
@@ -578,7 +585,10 @@
       newBg: "Новий фон",
       bgLoading: "Малюємо ШІ-фон…",
       bgOk: "ШІ-фон готовий.",
-      bgFail: "Сервіс ШІ-зображень не відповів, використано градієнтний фон. Натисніть «Новий фон».",
+      bgFail: "Сервіс ШІ-зображень не відповів, використано студійний фон. Натисніть «Новий фон».",
+      bgHf: "Малюємо ШІ-фон (Hugging Face)…",
+      hlHint: "Порада: візьміть слово в *зірочки*, щоб виділити його кольором.",
+      badgeLabel: "Текст стікера",
       bgQueued: "Чекаємо черги на ШІ-фон…",
       bgWait: "ШІ-фон приблизно через {s} с (безкоштовний сервіс малює 1 картинку раз на 45 секунд).",
       bgTemp: "Тимчасовий фон від першої обкладинки.",
@@ -586,7 +596,7 @@
       copied: "Скопійовано ✓",
       chars: "симв.",
       ctr: "CTR",
-      dlFail: "ШІ-фон заборонив завантаження, тому PNG збережено з градієнтним фоном.",
+      dlFail: "ШІ-фон заборонив завантаження, тому PNG збережено зі студійним фоном.",
       footerNote: "Безкоштовно · Без реєстрації · Обкладинки створюються у вашому браузері",
       tgOpen: "Відкрити в Telegram",
       eco1desc: "Нарізка Shorts з будь-якого YouTube-посилання",
@@ -607,7 +617,7 @@
     data: null,        // last API response
     concepts: [],      // concepts with editable overlay text
     bg: [],            // loaded background images (or null)
-    bgState: [],       // "queued" | "loading" | "ok" | "fail"
+    bgState: [],       // "hf" | "queued" | "loading" | "ok" | "fail"
     bgErr: [],         // short reason of the last failure per card
     sharedBg: null,    // first AI picture of this run, used as a temporary background for the others
     photo: null,       // user photo (downscaled canvas)
@@ -737,7 +747,8 @@
   function showResults(data) {
     state.data = data;
     state.concepts = data.concepts.map(function (c) {
-      return { angle: c.angle_name, text: c.overlay_text, accent: c.accent_color, prompt: c.image_prompt, tip: c.ctr_tip };
+      return { angle: c.angle_name, text: c.overlay_text, accent: c.accent_color, prompt: c.image_prompt,
+               short: c.bg_prompt || "", hl: c.highlight || "", badge: c.badge || "", tip: c.ctr_tip };
     });
     state.bg = [null, null, null];
     state.bgState = ["queued", "queued", "queued"];
@@ -749,7 +760,7 @@
     renderConceptCards();
     renderTitles();
     resetBgQueue();
-    for (var i = 0; i < state.concepts.length; i++) queueBackground(i);
+    for (var i = 0; i < state.concepts.length; i++) requestBackground(i);
     el("results").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -786,7 +797,10 @@
           '<div class="angle"><span class="sw" style="background:' + escapeHtml(c.accent) + '"></span>' + escapeHtml(c.angle) + "</div>" +
           '<p class="tip">' + escapeHtml(c.tip) + "</p>" +
           '<div class="ov-edit"><label for="ov' + i + '">' + escapeHtml(t("overlayLabel")) + '</label>' +
-            '<input id="ov' + i + '" data-i="' + i + '" type="text" maxlength="40" value="' + escapeHtml(c.text) + '" /></div>' +
+            '<input id="ov' + i + '" data-i="' + i + '" type="text" maxlength="44" value="' + escapeHtml(c.text) + '" />' +
+            '<p class="ov-hint">' + escapeHtml(t("hlHint")) + "</p></div>" +
+          (i === 1 ? "" : '<div class="ov-edit"><label for="bd' + i + '">' + escapeHtml(t("badgeLabel")) + '</label>' +
+            '<input id="bd' + i + '" data-b="' + i + '" type="text" maxlength="16" value="' + escapeHtml(c.badge) + '" /></div>') +
           '<div class="bg-state" id="bgs' + i + '" aria-live="polite"></div>' +
           '<div class="thumb-actions">' +
             '<button type="button" class="btn-dl" data-dl="' + i + '">⬇ ' + escapeHtml(t("download")) + "</button>" +
@@ -805,7 +819,7 @@
     var waitTxt = eta > 1 ? t("bgWait").replace("{s}", eta) : t("bgQueued");
     if (state.sharedBg && !state.bg[i]) waitTxt = t("bgTemp") + " " + waitTxt;
     var failTxt = "⚠ " + t("bgFail") + (state.bgErr[i] ? " (" + state.bgErr[i] + ")" : "");
-    var map = { queued: ["", waitTxt, true], loading: ["", (state.sharedBg && !state.bg[i] ? t("bgTemp") + " " : "") + t("bgLoading"), true], ok: ["ok", "✓ " + t("bgOk"), false], fail: ["warn", failTxt, false] };
+    var map = { hf: ["", (state.sharedBg && !state.bg[i] ? t("bgTemp") + " " : "") + t("bgHf"), true], queued: ["", waitTxt, true], loading: ["", (state.sharedBg && !state.bg[i] ? t("bgTemp") + " " : "") + t("bgLoading"), true], ok: ["ok", "✓ " + t("bgOk"), false], fail: ["warn", failTxt, false] };
     var m = map[s] || map.queued;
     node.className = "bg-state " + m[0];
     node.innerHTML = (m[2] ? '<span class="mini" aria-hidden="true"></span>' : "") + "<span>" + escapeHtml(m[1]) + "</span>";
@@ -816,9 +830,82 @@
   // HTTP 402 with a yellow "Free limit reached" picture, which an <img> would happily show.
   // So images are fetched with fetch() (status is checked), strictly one after another,
   // at least BG_GAP_MS apart — also across page reloads (localStorage) — with a countdown.
-  // The picture is requested 80 px taller and the bottom strip with the free-tier mark is cut off.
+  // Short prompts (<= 12 words) are used, the picture is zoomed 1.08x from the top so the bottom
+  // strip with the free-tier mark is cut off, and "limit" cards are rejected by size + pixels.
+  // If HF_TOKEN is set on the server, Hugging Face draws the backgrounds first (no queue).
   var BG_GAP_MS = 47000, BG_TIMEOUT_MS = 75000, BG_MAX_TRIES = 4, BG_KEY = "csai_pollinations_last";
-  var BG_W = 1280, BG_H = 800, BG_CROP = 80 / 800;
+  var BG_W = 1280, BG_H = 720, BG_ZOOM = 1.08;
+  var hfOff = false;   // token rejected / credits used up -> stop asking Hugging Face this session
+
+  function useHf() { return !!(state.data && state.data.hf) && !hfOff; }
+
+  function requestBackground(i) {
+    if (useHf()) hfBackground(i); else queueBackground(i);
+  }
+
+  function hfBackground(i) {
+    var run = state.run, c = state.concepts[i];
+    state.bgState[i] = "hf"; state.bgErr[i] = ""; renderBgState(i);
+    var ctrl = window.AbortController ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 65000);
+    fetch("/api/thumbnails", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bg: c.prompt, seed: Math.floor(Math.random() * 1e9) }), signal: ctrl ? ctrl.signal : undefined })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.success || !d.image) {
+          var e = new Error((d && d.error) || "error"); e.code = d && d.code; throw e;
+        }
+        return new Promise(function (resolve, reject) {
+          var img = new Image();
+          img.onload = function () { resolve(img); };
+          img.onerror = function () { reject(new Error("bad image")); };
+          img.src = d.image;
+        });
+      })
+      .then(function (img) {
+        clearTimeout(timer);
+        if (run !== state.run) return;
+        if (isStub(img)) throw new Error("empty picture");
+        img.zoom = 1;
+        bgReady(i, img);
+      })
+      .catch(function (e) {
+        clearTimeout(timer);
+        if (run !== state.run) return;
+        if (e && (e.code === 0 || e.code === 401 || e.code === 403 || e.code === 402)) hfOff = true;
+        if (window.console) console.warn("Hugging Face background failed, using Pollinations:", e && e.message);
+        queueBackground(i);   // free Pollinations queue as the backup
+      });
+  }
+
+  // "Free limit reached" card / empty picture: wrong size, mostly yellow or almost flat
+  function isStub(img) {
+    var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+    if (!w || !h || w < 400 || Math.abs(w / h - BG_W / BG_H) > 0.05) return true;
+    try {
+      var c = document.createElement("canvas"); c.width = 32; c.height = 18;
+      var x = c.getContext("2d"); x.drawImage(img, 0, 0, 32, 18);
+      var d = x.getImageData(0, 0, 32, 18).data, yellow = 0, n = 0, sum = 0, sum2 = 0;
+      for (var k = 0; k < d.length; k += 4) {
+        var r = d[k], g = d[k + 1], b = d[k + 2], l = 0.3 * r + 0.59 * g + 0.11 * b;
+        if (r > 190 && g > 150 && b < 110 && r - b > 100) yellow++;
+        sum += l; sum2 += l * l; n++;
+      }
+      var sd = Math.sqrt(Math.max(0, sum2 / n - (sum / n) * (sum / n)));
+      return yellow / n > 0.45 || sd < 5;
+    } catch (e) {
+      return false;   // pixels unreadable: keep the picture (the size check already passed)
+    }
+  }
+
+  function bgReady(i, img) {
+    state.bg[i] = img; state.bgState[i] = "ok"; state.bgErr[i] = "";
+    if (!state.sharedBg) {
+      state.sharedBg = img;   // others show it until their own picture arrives
+      for (var k = 0; k < state.concepts.length; k++) if (!state.bg[k]) { drawThumb(k); renderBgState(k); }
+    }
+    drawThumb(i); renderBgState(i);
+  }
   var bgQueue = [], bgBusy = false, bgTimer = null, bgTicker = null, bgNotBefore = 0, bgUseImg = false;
 
   function bgErr(kind, short, retryMs) {
@@ -829,6 +916,7 @@
 
   function bgUrl(prompt) {
     var seed = Math.floor(Math.random() * 1e9);
+    prompt = String(prompt || "").split(/\s+/).filter(Boolean).slice(0, 12).join(" ");
     return "https://image.pollinations.ai/prompt/" + encodeURIComponent(prompt) +
       "?width=" + BG_W + "&height=" + BG_H + "&nologo=true&private=true&model=flux&seed=" + seed + "&referrer=creator-studio-ai";
   }
@@ -879,16 +967,18 @@
     bgMark();
     state.bgState[job.i] = "loading"; renderBgState(job.i); tickBg();
 
-    var url = bgUrl(state.concepts[job.i].prompt);
+    var promptOf = function () { var c = state.concepts[job.i]; return c.short || c.prompt; };
+    var url = bgUrl(promptOf());
     var timer = null, ctrl = null;
     var loader = bgUseImg ? loadViaImg(url) : loadViaFetch(url).catch(function (e) {
-      if (e && e.network) { bgUseImg = true; return loadViaImg(bgUrl(state.concepts[job.i].prompt)); }   // fetch blocked -> plain <img>
+      if (e && e.network) { bgUseImg = true; return loadViaImg(bgUrl(promptOf())); }   // fetch blocked -> plain <img>
       throw e;
     });
     loader.then(function (img) {
-      img.cropBottom = img.naturalHeight > img.naturalWidth * 0.6 ? BG_CROP : 0;
-      done(true, img);
-    }, function (e) { done(false, null, e); });
+      if (isStub(img)) throw bgErr("busy", "limit card", BG_GAP_MS);
+      img.zoom = BG_ZOOM;
+      return img;
+    }).then(function (img) { done(true, img); }, function (e) { done(false, null, e); });
 
     function loadViaFetch(u) {
       ctrl = window.AbortController ? new AbortController() : null;
@@ -922,11 +1012,7 @@
         var img = new Image();
         img.crossOrigin = "anonymous";   // keeps the canvas exportable
         timer = setTimeout(function () { img.src = ""; reject(bgErr("timeout", "timeout")); }, BG_TIMEOUT_MS);
-        img.onload = function () {
-          // the "free limit" card is not our 1280x800 picture
-          var ratio = img.naturalWidth / Math.max(1, img.naturalHeight);
-          if (Math.abs(ratio - BG_W / BG_H) > 0.08) reject(bgErr("busy", "limit card", BG_GAP_MS)); else resolve(img);
-        };
+        img.onload = function () { resolve(img); };   // size / stub check happens in isStub()
         img.onerror = function () { reject(bgErr("busy", "img error", BG_GAP_MS)); };
         img.src = u;
       });
@@ -938,12 +1024,7 @@
       bgMark();   // the free tier counts 45 s from the end of the previous picture
       if (job.run !== state.run) { pumpBg(); return; }
       if (ok) {
-        state.bg[job.i] = img; state.bgState[job.i] = "ok"; state.bgErr[job.i] = "";
-        if (!state.sharedBg) {
-          state.sharedBg = img;   // others show it until their own picture arrives
-          for (var k = 0; k < state.concepts.length; k++) if (!state.bg[k]) { drawThumb(k); renderBgState(k); }
-        }
-        drawThumb(job.i); renderBgState(job.i);
+        bgReady(job.i, img);
       } else if (job.attempt < BG_MAX_TRIES) {
         // rate limit (402) or a network/CORS error, which is usually the same limit: wait and retry
         job.attempt++;
@@ -959,8 +1040,13 @@
   }
 
   // ---------- canvas rendering 1280x720 ----------
+  // Three compositions for the A/B/C test:
+  //   A: big headline on the left + sticker badge on top
+  //   B: tilted ribbon plate under the accent word + accent frame around the picture
+  //   C: big centered headline at the bottom with a neon glow + badge pill above it
   var W = 1280, H = 720;
   var FONT = '"Montserrat", "Arial Black", Impact, "Segoe UI", Roboto, Arial, sans-serif';
+  var SHADOW = "rgba(0,0,0,0.9)";
 
   function hexToRgb(h) {
     var m = /^#?([0-9a-f]{6})$/i.exec(h || "");
@@ -973,7 +1059,11 @@
     var f = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
     return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
   }
+  function onAccent(h) { return luminance(h) > 0.32 ? "#0b0f1a" : "#ffffff"; }
+  // sticker colour that contrasts with the accent (yellow accent -> red sticker, otherwise yellow)
+  function stickerColor(h) { var c = hexToRgb(h); return (c.r > 200 && c.g > 170 && c.b < 120) ? "#EF4444" : "#FACC15"; }
   function roundRect(ctx, x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
     ctx.beginPath();
     ctx.moveTo(x + r, y);
     ctx.arcTo(x + w, y, x + w, y + h, r);
@@ -982,157 +1072,359 @@
     ctx.arcTo(x, y, x + w, y, r);
     ctx.closePath();
   }
+  function topRoundRect(ctx, x, y, w, h, r) {   // rounded top corners, square bottom (portrait cut-out)
+    ctx.beginPath();
+    ctx.moveTo(x, y + h);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h);
+  }
+  // cover-fit; img.zoom > 1 zooms in anchored to the top (cuts the bottom strip with the free-tier mark)
   function drawCover(ctx, img, x, y, w, h, focusY) {
-    var iw = img.naturalWidth || img.width, ih = (img.naturalHeight || img.height) * (1 - (img.cropBottom || 0));
-    var s = Math.max(w / iw, h / ih), sw = w / s, sh = h / s;
-    var sx = (iw - sw) / 2, sy = Math.max(0, Math.min(ih - sh, (ih - sh) * (focusY == null ? 0.5 : focusY)));
+    var iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height, z = img.zoom || 1;
+    var rx = (iw - iw / z) / 2, rw = iw / z, rh = ih / z;
+    var s = Math.max(w / rw, h / rh), sw = w / s, sh = h / s;
+    var sx = rx + (rw - sw) / 2, sy = Math.max(0, Math.min(rh - sh, (rh - sh) * (focusY == null ? 0.5 : focusY)));
     ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
   }
 
-  function drawGradientBg(ctx, accent, i) {
-    var g = ctx.createLinearGradient(0, 0, W, H);
-    g.addColorStop(0, "#0a0f1f");
-    g.addColorStop(0.55, "#121a33");
-    g.addColorStop(1, rgba(accent, 0.55));
-    ctx.fillStyle = "#0a0f1f"; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    var r = ctx.createRadialGradient(W * 0.8, H * 0.45, 20, W * 0.8, H * 0.45, 560);
-    r.addColorStop(0, rgba(accent, 0.75)); r.addColorStop(1, rgba(accent, 0));
-    ctx.fillStyle = r; ctx.fillRect(0, 0, W, H);
-    // light rays for depth (different angle per variant)
+  // fallback: studio background with a radial spotlight (no AI picture)
+  function drawStudioBg(ctx, accent, layout) {
+    var base = ctx.createRadialGradient(W * 0.55, H * 0.45, 40, W * 0.55, H * 0.5, W * 0.8);
+    base.addColorStop(0, "#1b2238"); base.addColorStop(0.55, "#0c111f"); base.addColorStop(1, "#04060b");
+    ctx.fillStyle = base; ctx.fillRect(0, 0, W, H);
+    var sx = layout === 2 ? W * 0.5 : W * 0.72, sy = layout === 2 ? H * 0.3 : H * 0.4;
+    // light cone from above
+    var cone = ctx.createLinearGradient(0, 0, 0, H);
+    cone.addColorStop(0, "rgba(255,255,255,0.10)"); cone.addColorStop(1, "rgba(255,255,255,0)");
     ctx.save();
-    ctx.translate(W * 0.8, H * 0.45);
-    ctx.rotate(-0.35 + i * 0.3);
-    ctx.fillStyle = "rgba(255,255,255,0.05)";
-    for (var k = 0; k < 7; k++) { ctx.rotate(Math.PI / 7); ctx.fillRect(0, -18, 1200, 36); }
+    ctx.beginPath(); ctx.moveTo(sx - 70, 0); ctx.lineTo(sx + 70, 0); ctx.lineTo(sx + 420, H); ctx.lineTo(sx - 420, H); ctx.closePath();
+    ctx.fillStyle = cone; ctx.fill();
+    ctx.restore();
+    // coloured spotlight
+    var spot = ctx.createRadialGradient(sx, sy, 10, sx, sy, 600);
+    spot.addColorStop(0, rgba(accent, 0.75)); spot.addColorStop(0.35, rgba(accent, 0.32)); spot.addColorStop(1, rgba(accent, 0));
+    ctx.fillStyle = spot; ctx.fillRect(0, 0, W, H);
+    var core = ctx.createRadialGradient(sx, sy, 0, sx, sy, 170);
+    core.addColorStop(0, "rgba(255,255,255,0.35)"); core.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = core; ctx.fillRect(0, 0, W, H);
+    // cool rim light in the opposite corner
+    var rim = ctx.createRadialGradient(layout === 2 ? W * 0.05 : W * 0.1, H * 0.05, 0, layout === 2 ? W * 0.05 : W * 0.1, H * 0.05, 520);
+    rim.addColorStop(0, "rgba(120,160,255,0.22)"); rim.addColorStop(1, "rgba(120,160,255,0)");
+    ctx.fillStyle = rim; ctx.fillRect(0, 0, W, H);
+    // glossy floor reflection
+    ctx.save();
+    ctx.translate(sx, H * 0.98); ctx.scale(1, 0.18);
+    var floor = ctx.createRadialGradient(0, 0, 0, 0, 0, 700);
+    floor.addColorStop(0, rgba(accent, 0.45)); floor.addColorStop(1, rgba(accent, 0));
+    ctx.fillStyle = floor; ctx.fillRect(-W, -800, W * 2, 1600);
+    ctx.restore();
+    // fine diagonal texture
+    ctx.save();
+    ctx.globalAlpha = 0.04; ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2;
+    for (var k = -H; k < W; k += 26) { ctx.beginPath(); ctx.moveTo(k, H); ctx.lineTo(k + H, 0); ctx.stroke(); }
     ctx.restore();
   }
 
-  // best split of the words into lines (<=3, or <=4 for long text) -> largest font that fits
-  function layoutText(ctx, words, maxW, maxH) {
-    var n = words.length, best = null, maxLines = n <= 4 ? 3 : 4;
+  // directional shade: dark where the text is, transparent towards the subject
+  function drawShade(ctx, layout) {
+    var g;
+    if (layout === 2) {
+      g = ctx.createLinearGradient(0, H, 0, H * 0.3);
+      g.addColorStop(0, "rgba(0,0,0,0.88)"); g.addColorStop(0.45, "rgba(0,0,0,0.5)"); g.addColorStop(1, "rgba(0,0,0,0)");
+    } else {
+      g = ctx.createLinearGradient(0, 0, W * 0.64, 0);
+      g.addColorStop(0, "rgba(0,0,0,0.88)"); g.addColorStop(0.5, "rgba(0,0,0,0.52)"); g.addColorStop(1, "rgba(0,0,0,0)");
+    }
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    var e = ctx.createRadialGradient(W / 2, H / 2, H * 0.5, W / 2, H / 2, W * 0.78);
+    e.addColorStop(0, "rgba(0,0,0,0)"); e.addColorStop(1, "rgba(0,0,0,0.42)");
+    ctx.fillStyle = e; ctx.fillRect(0, 0, W, H);
+  }
+
+  // user photo in the right third: soft fade at the bottom + light outline + accent glow
+  var photoCache = { src: null, w: 0, h: 0, canvas: null };
+  function photoLayer(photo, pw, ph) {
+    if (photoCache.src === photo && photoCache.w === pw && photoCache.h === ph) return photoCache.canvas;
+    var oc = document.createElement("canvas"); oc.width = pw; oc.height = ph;
+    var o = oc.getContext("2d");
+    o.save();
+    topRoundRect(o, 0, 0, pw, ph, 36); o.closePath(); o.clip();
+    drawCover(o, photo, 0, 0, pw, ph, 0.25);
+    o.restore();
+    o.globalCompositeOperation = "destination-in";
+    var fade = o.createLinearGradient(0, 0, 0, ph);
+    fade.addColorStop(0, "rgba(0,0,0,1)"); fade.addColorStop(0.7, "rgba(0,0,0,1)"); fade.addColorStop(1, "rgba(0,0,0,0)");
+    o.fillStyle = fade; o.fillRect(0, 0, pw, ph);
+    o.globalCompositeOperation = "source-over";
+    photoCache = { src: photo, w: pw, h: ph, canvas: oc };
+    return oc;
+  }
+  function photoBox(layout) {
+    var framed = layout === 1, pw = Math.round(W * (framed ? 0.33 : 0.35)), ph = H - (framed ? 74 : 44);
+    return { x: W - pw - (framed ? 62 : 34), y: H - ph - (framed ? 30 : 0), w: pw, h: ph };
+  }
+  function drawPhoto(ctx, photo, accent, layout) {
+    var b = photoBox(layout), layer = photoLayer(photo, b.w, b.h);
+    // accent halo behind the person
+    var halo = ctx.createRadialGradient(b.x + b.w / 2, b.y + b.h * 0.38, 40, b.x + b.w / 2, b.y + b.h * 0.38, b.w);
+    halo.addColorStop(0, rgba(accent, 0.55)); halo.addColorStop(1, rgba(accent, 0));
+    ctx.fillStyle = halo; ctx.fillRect(b.x - b.w, 0, b.w * 3, H);
+    // glows that follow the photo shape (shadow-only passes, the image itself is drawn off-canvas)
+    var OFF = 5000;
+    ctx.save();
+    ctx.shadowOffsetX = OFF;
+    ctx.shadowColor = "rgba(0,0,0,0.75)"; ctx.shadowBlur = 46; ctx.shadowOffsetY = 18;
+    ctx.drawImage(layer, b.x - OFF, b.y);
+    ctx.shadowOffsetY = 0;
+    ctx.shadowColor = rgba(accent, 0.95); ctx.shadowBlur = 34;
+    ctx.drawImage(layer, b.x - OFF, b.y);
+    ctx.shadowColor = "rgba(255,255,255,0.9)"; ctx.shadowBlur = 7;
+    ctx.drawImage(layer, b.x - OFF, b.y);
+    ctx.restore();
+    ctx.drawImage(layer, b.x, b.y);
+    // light outline: accent + white, both fading out towards the bottom
+    var gA = ctx.createLinearGradient(0, b.y, 0, b.y + b.h);
+    gA.addColorStop(0, accent); gA.addColorStop(0.62, rgba(accent, 0.8)); gA.addColorStop(0.92, rgba(accent, 0));
+    var gW = ctx.createLinearGradient(0, b.y, 0, b.y + b.h);
+    gW.addColorStop(0, "rgba(255,255,255,0.95)"); gW.addColorStop(0.6, "rgba(255,255,255,0.6)"); gW.addColorStop(0.9, "rgba(255,255,255,0)");
+    ctx.save();
+    ctx.lineJoin = "round";
+    topRoundRect(ctx, b.x - 5, b.y - 5, b.w + 10, b.h + 5, 40); ctx.lineWidth = 8; ctx.strokeStyle = gA; ctx.stroke();
+    topRoundRect(ctx, b.x + 4, b.y + 4, b.w - 8, b.h - 4, 32); ctx.lineWidth = 2.5; ctx.strokeStyle = gW; ctx.stroke();
+    ctx.restore();
+    return b;
+  }
+
+  // text -> words + index of the accent word (*word* in the editor wins, then Gemini's pick, then a number, then the longest word)
+  function parseHeadline(raw, hint, locale) {
+    var marked = -1, words = [];
+    String(raw || "").trim().split(/\s+/).forEach(function (w) {
+      var clean = w.replace(/\*/g, "");
+      if (!clean || words.length >= 10) return;
+      if (marked < 0 && w.indexOf("*") >= 0) marked = words.length;
+      words.push(clean.toLocaleUpperCase(locale));
+    });
+    if (!words.length) return { words: [], hl: -1 };
+    if (marked >= 0) return { words: words, hl: Math.min(marked, words.length - 1) };
+    var bare = function (w) { return w.replace(/[^\p{L}\p{N}%$€₴₽+]/gu, ""); };
+    var h = bare(String(hint || "").toLocaleUpperCase(locale));
+    if (h) for (var a = 0; a < words.length; a++) if (bare(words[a]) === h) return { words: words, hl: a };
+    for (var b = 0; b < words.length; b++) if (/\p{N}/u.test(words[b])) return { words: words, hl: b };
+    var best = words.length - 1;
+    for (var c = 0; c < words.length; c++) if (bare(words[c]).length > bare(words[best]).length) best = c;
+    return { words: words, hl: best };
+  }
+
+  // best split of the words into lines -> largest font that fits; lines are arrays of word indices
+  function layoutText(ctx, words, maxW, maxH, maxSize, maxLines, extraW) {
+    var n = words.length, best = null;
+    ctx.font = "900 100px " + FONT;
+    var space = ctx.measureText(" ").width, ws = words.map(function (w) { return ctx.measureText(w).width; });
     for (var mask = 0; mask < (1 << Math.max(0, n - 1)); mask++) {
-      var lines = [], cur = [words[0]];
+      var lines = [], cur = [0];
       for (var k = 1; k < n; k++) {
-        if (mask & (1 << (k - 1))) { lines.push(cur.join(" ")); cur = [words[k]]; } else cur.push(words[k]);
+        if (mask & (1 << (k - 1))) { lines.push(cur); cur = [k]; } else cur.push(k);
       }
-      lines.push(cur.join(" "));
+      lines.push(cur);
       if (lines.length > maxLines) continue;
-      ctx.font = "900 100px " + FONT;
       var wMax = 0;
-      for (var j = 0; j < lines.length; j++) wMax = Math.max(wMax, ctx.measureText(lines[j]).width);
-      var size = Math.min(190, 100 * maxW / (wMax + 1), maxH / (lines.length * 1.08));
+      for (var j = 0; j < lines.length; j++) {
+        var lw = 0;
+        for (var q = 0; q < lines[j].length; q++) lw += ws[lines[j][q]] + (q ? space : 0);
+        wMax = Math.max(wMax, lw);
+      }
+      var size = Math.min(maxSize, 100 * maxW / (wMax + extraW + 1), maxH / (lines.length * 1.04));
       if (!best || size > best.size + 2 || (Math.abs(size - best.size) <= 2 && lines.length < best.lines.length)) {
         best = { size: size, lines: lines };
       }
     }
-    best.size = Math.max(40, Math.floor(best.size));
+    best.size = Math.max(36, Math.floor(best.size));
     return best;
+  }
+
+  function lineWidth(ctx, words, idx) {
+    var w = 0, sp = ctx.measureText(" ").width;
+    for (var q = 0; q < idx.length; q++) w += ctx.measureText(words[idx[q]]).width + (q ? sp : 0);
+    return w;
+  }
+
+  // plain word: clean white with a dense shadow and a thin dark edge
+  function whiteWord(ctx, w, x, y, size) {
+    ctx.save();
+    ctx.shadowColor = SHADOW; ctx.shadowBlur = 18; ctx.shadowOffsetY = 4;
+    ctx.lineWidth = Math.max(4, size * 0.07); ctx.strokeStyle = "rgba(4,6,12,0.95)";
+    ctx.strokeText(w, x, y);
+    ctx.restore();
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(w, x, y);
+  }
+
+  function accentWord(ctx, w, x, y, size, accent, layout, ww) {
+    if (layout === 1) {   // B: tilted ribbon plate
+      var padX = size * 0.2, padY = size * 0.1, top = y - size * 0.86 - padY, hh = size * 0.98 + padY * 2;
+      var left = x - padX, right = x + ww + padX;
+      if (x < 120) left = -40;   // first word of the line: the ribbon runs in from the edge
+      ctx.save();
+      ctx.translate((left + right) / 2, top + hh / 2); ctx.rotate(-2 * Math.PI / 180);
+      ctx.shadowColor = "rgba(0,0,0,0.6)"; ctx.shadowBlur = 26; ctx.shadowOffsetY = 10;
+      roundRect(ctx, (left - right) / 2, -hh / 2, right - left, hh, size * 0.14);
+      ctx.fillStyle = accent; ctx.fill();
+      ctx.shadowColor = "transparent";
+      ctx.fillStyle = "rgba(255,255,255,0.18)";
+      roundRect(ctx, (left - right) / 2, -hh / 2, right - left, hh * 0.42, size * 0.14); ctx.fill();
+      ctx.translate(-(left + right) / 2, -(top + hh / 2));
+      ctx.fillStyle = onAccent(accent);
+      ctx.fillText(w, x, y);
+      ctx.restore();
+      return;
+    }
+    if (layout === 2) {   // C: neon
+      ctx.save();
+      ctx.fillStyle = accent;
+      ctx.shadowColor = accent;
+      ctx.shadowBlur = 60; ctx.fillText(w, x, y);
+      ctx.shadowBlur = 28; ctx.fillText(w, x, y);
+      ctx.shadowColor = "rgba(255,255,255,0.8)"; ctx.shadowBlur = 6; ctx.fillText(w, x, y);
+      ctx.restore();
+      ctx.save();
+      ctx.lineWidth = Math.max(2, size * 0.025); ctx.strokeStyle = "rgba(255,255,255,0.85)";
+      ctx.strokeText(w, x, y);
+      ctx.restore();
+      return;
+    }
+    // A: accent-coloured word with a dark edge
+    ctx.save();
+    ctx.shadowColor = SHADOW; ctx.shadowBlur = 18; ctx.shadowOffsetY = 4;
+    ctx.lineWidth = Math.max(6, size * 0.1); ctx.strokeStyle = "rgba(4,6,12,0.95)";
+    ctx.strokeText(w, x, y);
+    ctx.restore();
+    ctx.save();
+    ctx.shadowColor = rgba(accent, 0.55); ctx.shadowBlur = 24;
+    ctx.fillStyle = accent; ctx.fillText(w, x, y);
+    ctx.restore();
+  }
+
+  function drawHeadline(ctx, P, accent, layout, area) {
+    if (!P.words.length) return null;
+    var maxLines = layout === 2 ? (P.words.length > 4 ? 3 : 2) : (P.words.length <= 4 ? 3 : 4);
+    var maxSize = layout === 0 ? 176 : layout === 1 ? 164 : 150;
+    var L = layoutText(ctx, P.words, area.w, area.h, maxSize, maxLines, layout === 1 ? 50 : 0);
+    var size = L.size, lh = size * 1.04, blockH = (L.lines.length - 1) * lh + size * 0.9;
+    ctx.font = "900 " + size + "px " + FONT;
+    ctx.textBaseline = "alphabetic"; ctx.lineJoin = "round"; ctx.miterLimit = 2;
+    var y = (layout === 2 ? area.y + area.h - blockH : area.y + (area.h - blockH) / 2) + size * 0.9;
+    var first = y - size * 0.9, sp = ctx.measureText(" ").width;
+    // C: soft neon halo behind the whole block
+    if (layout === 2) {
+      var hw = 0;
+      for (var j0 = 0; j0 < L.lines.length; j0++) hw = Math.max(hw, lineWidth(ctx, P.words, L.lines[j0]));
+      var cx = area.x + area.w / 2, cy = first + blockH / 2;
+      ctx.save(); ctx.translate(cx, cy); ctx.scale(1, Math.max(0.25, blockH / hw));
+      var halo = ctx.createRadialGradient(0, 0, 0, 0, 0, hw * 0.62);
+      halo.addColorStop(0, rgba(accent, 0.28)); halo.addColorStop(1, rgba(accent, 0));
+      ctx.fillStyle = halo; ctx.fillRect(-hw, -hw, hw * 2, hw * 2);
+      ctx.restore();
+    }
+    for (var j = 0; j < L.lines.length; j++) {
+      var idx = L.lines[j], lw = lineWidth(ctx, P.words, idx);
+      var x = layout === 2 ? area.x + (area.w - lw) / 2 : area.x;
+      for (var q = 0; q < idx.length; q++) {
+        var w = P.words[idx[q]], ww = ctx.measureText(w).width;
+        if (idx[q] === P.hl) accentWord(ctx, w, x, y, size, accent, layout, ww); else whiteWord(ctx, w, x, y, size);
+        x += ww + sp;
+      }
+      y += lh;
+    }
+    return { top: first, h: blockH, size: size };
+  }
+
+  function drawSticker(ctx, text, accent) {   // A: tilted sticker badge on top
+    if (!text) return;
+    var col = stickerColor(accent), size = 40;
+    ctx.save();
+    ctx.font = "900 " + size + "px " + FONT;
+    var tw = ctx.measureText(text).width, padX = 26, h = 68, w = tw + padX * 2;
+    ctx.translate(60 + w / 2, 58 + h / 2); ctx.rotate(-5 * Math.PI / 180);
+    ctx.shadowColor = "rgba(0,0,0,0.6)"; ctx.shadowBlur = 22; ctx.shadowOffsetY = 8;
+    roundRect(ctx, -w / 2, -h / 2, w, h, 16); ctx.fillStyle = col; ctx.fill();
+    ctx.shadowColor = "transparent";
+    ctx.lineWidth = 5; ctx.strokeStyle = "#ffffff"; ctx.stroke();
+    ctx.fillStyle = onAccent(col); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(text, 0, 3);
+    ctx.restore();
+  }
+
+  function drawFrame(ctx, accent) {   // B: accent frame around the picture
+    ctx.save();
+    ctx.shadowColor = rgba(accent, 0.9); ctx.shadowBlur = 30;
+    roundRect(ctx, 14, 14, W - 28, H - 28, 26);
+    ctx.lineWidth = 14; ctx.strokeStyle = accent; ctx.stroke();
+    ctx.shadowColor = "transparent";
+    roundRect(ctx, 31, 31, W - 62, H - 62, 16);
+    ctx.lineWidth = 2; ctx.strokeStyle = "rgba(255,255,255,0.55)"; ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawPill(ctx, text, accent, cx, bottom) {   // C: glowing badge above the headline
+    if (!text) return;
+    ctx.save();
+    ctx.font = "800 30px " + FONT;
+    var tw = ctx.measureText(text).width, w = tw + 48, h = 52, x = cx - w / 2, y = bottom - h;
+    ctx.shadowColor = rgba(accent, 0.9); ctx.shadowBlur = 24;
+    roundRect(ctx, x, y, w, h, h / 2); ctx.fillStyle = "rgba(6,8,16,0.72)"; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = accent; ctx.stroke();
+    ctx.shadowBlur = 12; ctx.fillStyle = "#ffffff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(text, cx, y + h / 2 + 2);
+    ctx.restore();
   }
 
   function drawThumb(i) {
     var cv = el("cv" + i);
     if (!cv) return;
     var ctx = cv.getContext("2d");
-    var c = state.concepts[i], accent = c.accent, bg = state.bg[i], photo = state.photo;
+    var c = state.concepts[i], accent = c.accent, bg = state.bg[i], photo = state.photo, layout = i % 3;
+    var locale = state.data && state.data.lang === "ua" ? "uk" : (state.data && state.data.lang) || "en";
     ctx.save();
     ctx.clearRect(0, 0, W, H);
 
     // 1) background
     if (bg) {
-      drawCover(ctx, bg, 0, 0, W, H, 0.5);
+      drawCover(ctx, bg, 0, 0, W, H, 0.45);
     } else if (state.sharedBg) {
       // until this card gets its own AI picture, reuse the first one (mirrored / shifted + accent tint)
       ctx.save();
       if (i % 2 === 1) { ctx.translate(W, 0); ctx.scale(-1, 1); }
       drawCover(ctx, state.sharedBg, 0, 0, W, H, i === 2 ? 0.15 : 0.5);
       ctx.restore();
-      ctx.fillStyle = rgba(accent, 0.18); ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = rgba(accent, 0.16); ctx.fillRect(0, 0, W, H);
     } else {
-      drawGradientBg(ctx, accent, i);
+      drawStudioBg(ctx, accent, layout);
     }
 
-    // 2) vignette: dark left side for the headline + soft edges
-    var v = ctx.createLinearGradient(0, 0, W * 0.68, 0);
-    v.addColorStop(0, "rgba(5,7,14,0.86)"); v.addColorStop(0.6, "rgba(5,7,14,0.45)"); v.addColorStop(1, "rgba(5,7,14,0)");
-    ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
-    var e = ctx.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, W * 0.75);
-    e.addColorStop(0, "rgba(0,0,0,0)"); e.addColorStop(1, "rgba(0,0,0,0.55)");
-    ctx.fillStyle = e; ctx.fillRect(0, 0, W, H);
+    // 2) directional shade under the text
+    drawShade(ctx, layout);
 
-    // 3) user portrait on the right
-    var textMaxW = 700;
-    if (photo) {
-      var pw = 430, ph = 600, px = W - pw - 56, py = (H - ph) / 2 + 10;
-      ctx.save();
-      var glow = ctx.createRadialGradient(px + pw / 2, py + ph / 2, 60, px + pw / 2, py + ph / 2, 420);
-      glow.addColorStop(0, rgba(accent, 0.55)); glow.addColorStop(1, rgba(accent, 0));
-      ctx.fillStyle = glow; ctx.fillRect(px - 200, py - 120, pw + 400, ph + 240);
-      ctx.shadowColor = "rgba(0,0,0,0.65)"; ctx.shadowBlur = 50; ctx.shadowOffsetY = 18;
-      roundRect(ctx, px, py, pw, ph, 40); ctx.fillStyle = "#0b1020"; ctx.fill();
-      ctx.restore();
-      ctx.save();
-      roundRect(ctx, px, py, pw, ph, 40); ctx.clip();
-      drawCover(ctx, photo, px, py, pw, ph, 0.3);
-      var fade = ctx.createLinearGradient(0, py + ph * 0.7, 0, py + ph);
-      fade.addColorStop(0, "rgba(0,0,0,0)"); fade.addColorStop(1, "rgba(0,0,0,0.35)");
-      ctx.fillStyle = fade; ctx.fillRect(px, py, pw, ph);
-      ctx.restore();
-      ctx.save();
-      roundRect(ctx, px, py, pw, ph, 40);
-      ctx.lineWidth = 12; ctx.strokeStyle = accent; ctx.stroke();
-      roundRect(ctx, px + 9, py + 9, pw - 18, ph - 18, 32);
-      ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.stroke();
-      ctx.restore();
-      textMaxW = px - 64 - 24;
+    // 3) user photo in the right third
+    var pb = photo ? drawPhoto(ctx, photo, accent, layout) : null;
+    var textRight = pb ? pb.x - 36 : (layout === 2 ? W - 70 : W * 0.66);
+
+    // 4) composition
+    var P = parseHeadline(c.text, c.hl, locale);
+    var badge = String(c.badge || "").replace(/\*/g, "").trim().toLocaleUpperCase(locale);
+    if (layout === 0) {
+      drawHeadline(ctx, P, accent, 0, { x: 64, y: badge ? 150 : 60, w: textRight - 64, h: H - (badge ? 150 : 60) - 56 });
+      drawSticker(ctx, badge, accent);
+    } else if (layout === 1) {
+      drawFrame(ctx, accent);
+      drawHeadline(ctx, P, accent, 1, { x: 84, y: 70, w: textRight - 84, h: H - 140 });
+    } else {
+      var left = 70, area = { x: left, y: H * 0.42, w: textRight - left, h: H * 0.58 - 54 };
+      var r = drawHeadline(ctx, P, accent, 2, area);
+      if (r) drawPill(ctx, badge, accent, area.x + area.w / 2, r.top - 22);
     }
-
-    // 4) headline: big, bold, outlined; last line on an accent plate
-    var locale = state.data && state.data.lang === "ua" ? "uk" : (state.data && state.data.lang) || "en";
-    var text = (c.text || "").trim().toLocaleUpperCase(locale);
-    var words = text.split(/\s+/).filter(Boolean).slice(0, 10);
-    if (words.length) {
-      var L = layoutText(ctx, words, textMaxW - 40, 540);
-      var size = L.size, lh = size * 1.08, x0 = 64;
-      var blockH = L.lines.length * lh;
-      var y = (H - blockH) / 2 + size * 0.86;
-      var plateText = luminance(accent) > 0.32 ? "#0b0f1a" : "#ffffff";
-      ctx.font = "900 " + size + "px " + FONT;
-      ctx.textBaseline = "alphabetic";
-      ctx.lineJoin = "round"; ctx.miterLimit = 2;
-      for (var j = 0; j < L.lines.length; j++) {
-        var line = L.lines[j], last = j === L.lines.length - 1;
-        var w = ctx.measureText(line).width;
-        if (last) {
-          var padX = size * 0.22, padY = size * 0.12;
-          ctx.save();
-          ctx.translate(x0 + w / 2, y - size * 0.36);
-          ctx.rotate(-0.025);
-          ctx.shadowColor = "rgba(0,0,0,0.55)"; ctx.shadowBlur = 30; ctx.shadowOffsetY = 10;
-          roundRect(ctx, -w / 2 - padX, -size * 0.5 - padY, w + padX * 2, size + padY * 2 - size * 0.02, size * 0.14);
-          ctx.fillStyle = accent; ctx.fill();
-          ctx.restore();
-          ctx.save();
-          ctx.translate(x0 + w / 2, y - size * 0.36); ctx.rotate(-0.025); ctx.translate(-(x0 + w / 2), -(y - size * 0.36));
-          ctx.fillStyle = plateText;
-          ctx.fillText(line, x0, y);
-          ctx.restore();
-        } else {
-          ctx.save();
-          ctx.shadowColor = "rgba(0,0,0,0.6)"; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8;
-          ctx.lineWidth = Math.max(10, size * 0.14); ctx.strokeStyle = "#05070e";
-          ctx.strokeText(line, x0, y);
-          ctx.restore();
-          ctx.fillStyle = "#ffffff";
-          ctx.fillText(line, x0, y);
-        }
-        y += lh;
-      }
-    }
-
-    // 5) small accent bar for a finished look
-    ctx.fillStyle = accent;
-    ctx.fillRect(0, H - 14, W, 14);
     ctx.restore();
   }
 
@@ -1255,9 +1547,9 @@
 
   el("thumbs").addEventListener("input", function (e) {
     var i = e.target.getAttribute && e.target.getAttribute("data-i");
-    if (i == null) return;
-    state.concepts[+i].text = e.target.value;
-    drawThumb(+i);
+    var b = e.target.getAttribute && e.target.getAttribute("data-b");
+    if (i != null) { state.concepts[+i].text = e.target.value; state.concepts[+i].hl = ""; drawThumb(+i); }
+    if (b != null) { state.concepts[+b].badge = e.target.value; drawThumb(+b); }
   });
   el("thumbs").addEventListener("click", function (e) {
     var b = e.target.closest && e.target.closest("button");
@@ -1265,7 +1557,7 @@
     if (b.hasAttribute("data-dl")) download(+b.getAttribute("data-dl"));
     if (b.hasAttribute("data-nb")) {
       var k = +b.getAttribute("data-nb");
-      state.bg[k] = null; drawThumb(k); queueBackground(k);
+      state.bg[k] = null; drawThumb(k); requestBackground(k);
     }
   });
   el("titles").addEventListener("click", function (e) {

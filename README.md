@@ -93,6 +93,8 @@ the Telegram bot [@remtex_shorts_ai_bot](https://t.me/remtex_shorts_ai_bot).
 | `GEMINI_MODELS`      | optional | Comma-separated model list; skips asking Gemini for available models. |
 | `SUBS_PROXY_URL`     | optional | Content Repurposer: backup subtitle server, called as `GET {SUBS_PROXY_URL}?v={video_id}` when YouTube refuses the direct request. |
 | `SUBS_PROXY_TOKEN`   | optional | Sent to the backup subtitle server as the `X-Token` header.        |
+| `HF_TOKEN`           | optional | Thumbnail Lab: free Hugging Face token (`hf_…`, huggingface.co → Settings → Access Tokens). When set, AI backgrounds 1280×720 are drawn by Hugging Face (FLUX.1-schnell, SDXL as backup) instead of the free Pollinations queue. |
+| `HF_MODEL`           | optional | Comma-separated Hugging Face model ids tried before the defaults.  |
 
 > **Gemini 429 (quota exceeded)?** Free limits are counted **per Google Cloud project and per model** (daily limits reset at midnight Pacific). Extra keys only help if they come from **different projects**. Check your live limits at https://aistudio.google.com/rate-limit or enable billing for higher limits.
 
@@ -124,16 +126,25 @@ That's it — visit the deployed site, paste a YouTube link, and analyze.
    server (word count, punctuation, HEX, score range, length, language purity: no Cyrillic in
    EN, no ы/э/ъ/ё in UA, no і/ї/є/ґ in RU); anything that fails is replaced by a template.
    If Gemini is overloaded the tool still answers with templates (`"ai": "fallback"`).
-3. The browser renders each thumbnail on an HTML5 canvas at 1280×720: AI background from the
-   free `https://image.pollinations.ai/prompt/...?width=1280&height=720&nologo=true&seed=...`
-   endpoint. The free anonymous tier allows 1 image per 45 s per IP and otherwise answers HTTP 402
-   with a yellow "Free limit reached" picture, so backgrounds are fetched with `fetch()` (status
-   checked, 402 → wait and retry), strictly one at a time ≥ 47 s apart (remembered across reloads)
-   with a countdown on each card; a gradient background is shown meanwhile. Images are requested
-   at 1280×800 and the bottom strip with the free-tier mark is cropped off, dark vignette, your portrait on the side, and the big
-   headline in Montserrat 900 with outline and an accent plate — so Cyrillic and the Ukrainian
-   letters і ї є ґ are always perfect. Each card has **Download PNG (1280×720)**, editable text
-   and **New background**. The 6 titles are shown as A/B cards with CTR bar, trigger and **Copy**.
+3. The browser renders each thumbnail on an HTML5 canvas at 1280×720 with three different
+   compositions for the A/B/C test:
+   - **A** — big headline on the left + tilted sticker badge on top;
+   - **B** — accent word on a tilted (−2°) ribbon plate + glowing accent frame around the picture;
+   - **C** — big centered headline at the bottom with a neon glow + badge pill above it.
+
+   Every card has a directional shade (`rgba(0,0,0,0.88)` at the text edge → transparent towards
+   the subject), white words with a dense shadow and ONE accent word (Gemini's `highlight`, a number,
+   or any word the user wraps in `*asterisks*`). An uploaded photo sits in the right third with a soft
+   fade at the bottom, a light outline and an accent glow. Text and sticker are editable per card.
+4. Backgrounds: if `HF_TOKEN` is set, the browser asks `POST /api/thumbnails {"bg": prompt, "seed": n}`
+   and gets a ready data-URL from Hugging Face (`router.huggingface.co/hf-inference`, 3 in parallel).
+   Otherwise (or if HF fails) the free `https://image.pollinations.ai/prompt/...` endpoint is used with
+   a short prompt (`bg_prompt`, ≤ 12 words), one picture per ≥ 47 s with a countdown, the image is
+   zoomed 1.08× from the top (the bottom strip with the free-tier mark is cut off), and "Free limit
+   reached" cards are rejected by size and pixel check. Until a picture arrives (or if every try
+   fails) a studio background with a radial spotlight is drawn. Fonts: Montserrat 900, so Cyrillic and
+   і ї є ґ are always perfect. Each card has **Download PNG (1280×720)** and **New background**. The 6
+   titles are shown as A/B cards with CTR bar, trigger and **Copy**.
 
 `POST /api/thumbnails`
 
