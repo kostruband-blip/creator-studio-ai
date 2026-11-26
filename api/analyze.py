@@ -283,7 +283,7 @@ def get_videos_from_playlist(playlist_id, max_results=12):
 
 
 def _gemini_request(model, key, prompt):
-    url = GEMINI_BASE + model + ":generateContent?key=" + key
+    url = GEMINI_BASE + model + ":generateContent"
     body = {
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
         "generationConfig": {
@@ -296,7 +296,11 @@ def _gemini_request(model, key, prompt):
     req = urllib.request.Request(
         url,
         data=data,
-        headers={"Content-Type": "application/json"},
+        # Works with both the new "AQ." auth keys and legacy "AIza" keys.
+        headers={
+            "Content-Type": "application/json",
+            "x-goog-api-key": key.strip(),
+        },
         method="POST",
     )
     try:
@@ -602,6 +606,25 @@ def format(n):
 # ---------------------------------------------------------------------------
 
 
+def _looks_like_oauth_value(value):
+    """Detect common mix-ups pasted instead of an API key.
+
+    Does not require the 'AIza' prefix, so a future key format is not blocked.
+    """
+    v = (value or "").strip()
+    if v.startswith("ya29."):
+        return "an OAuth access token (ya29...)"
+    if v.startswith("gAWV") or v.startswith("gASV"):
+        return "saved OAuth credentials (base64 pickle of google.oauth2.credentials)"
+    if v.startswith("{") or '"token"' in v or '"refresh_token"' in v:
+        return "a JSON credentials blob"
+    if v.startswith("GOCSPX-") or v.endswith(".apps.googleusercontent.com"):
+        return "an OAuth client secret / client ID"
+    if any(c.isspace() for c in v):
+        return "a value with spaces or line breaks"
+    return None
+
+
 def analyze(url):
     if not YT_KEY:
         return {
@@ -616,6 +639,23 @@ def analyze(url):
                     "In Vercel: Project Settings -> Environment Variables, add "
                     "YOUTUBE_API_KEY and at least one GEMINI_API_KEY.",
                     "Redeploy the project.",
+                ],
+            },
+        }
+
+    bad_kind = _looks_like_oauth_value(YT_KEY)
+    if bad_kind:
+        return {
+            "success": False,
+            "error": "YOUTUBE_API_KEY contains %s, not an API key. "
+            "Reading public YouTube data needs a plain API key "
+            "(usually starts with 'AIza', 39 characters)." % bad_kind,
+            "setup": {
+                "title": "Create a YouTube Data API v3 key",
+                "steps": [
+                    "Google Cloud Console -> APIs & Services -> Credentials.",
+                    "Create credentials -> API key (NOT 'OAuth client ID').",
+                    "In Vercel, replace YOUTUBE_API_KEY with that key and redeploy.",
                 ],
             },
         }
@@ -681,6 +721,9 @@ def analyze(url):
 # ---------------------------------------------------------------------------
 
 
+from http.server import BaseHTTPRequestHandler  # noqa: E402
+
+
 def _send_json(handler, payload, status=200):
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     handler.send_response(status)
@@ -693,7 +736,7 @@ def _send_json(handler, payload, status=200):
     handler.wfile.write(body)
 
 
-class handler:  # noqa: N801 - required name for Vercel
+class handler(BaseHTTPRequestHandler):  # noqa: N801 - required name for Vercel
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
