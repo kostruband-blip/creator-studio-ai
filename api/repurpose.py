@@ -57,6 +57,8 @@ YT_BASE = "https://www.googleapis.com/youtube/v3/"
 # Our backup subtitle server (used only when YouTube refuses the direct request):
 # GET {SUBS_PROXY_URL}?v={video_id}  with header  X-Token: {SUBS_PROXY_TOKEN}  ->  {"text": "..."}
 SUBS_PROXY_URL = (os.environ.get("SUBS_PROXY_URL") or "").strip()
+if SUBS_PROXY_URL and "://" not in SUBS_PROXY_URL:
+    SUBS_PROXY_URL = "http://" + SUBS_PROXY_URL.lstrip("/")  # "1.2.3.4:8000/subs" -> "http://1.2.3.4:8000/subs"
 SUBS_PROXY_TOKEN = (os.environ.get("SUBS_PROXY_TOKEN") or "").strip()
 SUBS_PROXY_TIMEOUT = 25
 UA_HEADER = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
