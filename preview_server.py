@@ -27,6 +27,11 @@ PAGES = {"/": "index.html", "/index.html": "index.html",
          "/thumbnails.html": "thumbnails.html",
          "/repurpose": "repurpose.html", "/repurpose/": "repurpose.html",
          "/repurpose.html": "repurpose.html"}
+for _pre in ("ru", "uk"):  # localized copies built by tools/build_i18n_pages.py
+    PAGES.update({"/%s" % _pre: "%s/index.html" % _pre, "/%s/" % _pre: "%s/index.html" % _pre})
+    for _pg in ("thumbnails", "repurpose"):
+        PAGES.update({"/%s/%s" % (_pre, _pg): "%s/%s.html" % (_pre, _pg),
+                      "/%s/%s/" % (_pre, _pg): "%s/%s.html" % (_pre, _pg)})
 ICONS = {
     "/favicon.ico": "image/x-icon",
     "/favicon.svg": "image/svg+xml",

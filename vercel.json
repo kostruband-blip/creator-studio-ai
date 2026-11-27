@@ -34,6 +34,22 @@
     {
       "source": "/repurpose/",
       "destination": "/repurpose.html"
+    },
+    {
+      "source": "/:lang(ru|uk)",
+      "destination": "/:lang/index.html"
+    },
+    {
+      "source": "/:lang(ru|uk)/",
+      "destination": "/:lang/index.html"
+    },
+    {
+      "source": "/:lang(ru|uk)/:page(thumbnails|repurpose)",
+      "destination": "/:lang/:page.html"
+    },
+    {
+      "source": "/:lang(ru|uk)/:page(thumbnails|repurpose)/",
+      "destination": "/:lang/:page.html"
     }
   ],
   "headers": [
