@@ -1,6 +1,93 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://creator-studio-ai-psi.vercel.app/</loc><lastmod>2026-11-26</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>
-  <url><loc>https://creator-studio-ai-psi.vercel.app/thumbnails</loc><lastmod>2026-11-26</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://creator-studio-ai-psi.vercel.app/repurpose</loc><lastmod>2026-11-26</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://creator-studio-ai-psi.vercel.app/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://creator-studio-ai-psi.vercel.app/" />
+    <xhtml:link rel="alternate" hreflang="ru" href="https://creator-studio-ai-psi.vercel.app/ru/" />
+    <xhtml:link rel="alternate" hreflang="uk" href="https://creator-studio-ai-psi.vercel.app/uk/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://creator-studio-ai-psi.vercel.app/" />
+    <lastmod>2026-11-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://creator-studio-ai-psi.vercel.app/ru/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://creator-studio-ai-psi.vercel.app/" />
+    <xhtml:link rel="alternate" hreflang="ru" href="https://creator-studio-ai-psi.vercel.app/ru/" />
+    <xhtml:link rel="alternate" hreflang="uk" href="https://creator-studio-ai-psi.vercel.app/uk/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://creator-studio-ai-psi.vercel.app/" />
+    <lastmod>2026-11-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://creator-studio-ai-psi.vercel.app/uk/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://creator-studio-ai-psi.vercel.app/" />
+    <xhtml:link rel="alternate" hreflang="ru" href="https://creator-studio-ai-psi.vercel.app/ru/" />
+    <xhtml:link rel="alternate" hreflang="uk" href="https://creator-studio-ai-psi.vercel.app/uk/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://creator-studio-ai-psi.vercel.app/" />
+    <lastmod>2026-11-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://creator-studio-ai-psi.vercel.app/thumbnails</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://creator-studio-ai-psi.vercel.app/thumbnails" />
+    <xhtml:link rel="alternate" hreflang="ru" href="https://creator-studio-ai-psi.vercel.app/ru/thumbnails" />
+    <xhtml:link rel="alternate" hreflang="uk" href="https://creator-studio-ai-psi.vercel.app/uk/thumbnails" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://creator-studio-ai-psi.vercel.app/thumbnails" />
+    <lastmod>2026-11-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://creator-studio-ai-psi.vercel.app/ru/thumbnails</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://creator-studio-ai-psi.vercel.app/thumbnails" />
+    <xhtml:link rel="alternate" hreflang="ru" href="https://creator-studio-ai-psi.vercel.app/ru/thumbnails" />
+    <xhtml:link rel="alternate" hreflang="uk" href="https://creator-studio-ai-psi.vercel.app/uk/thumbnails" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://creator-studio-ai-psi.vercel.app/thumbnails" />
+    <lastmod>2026-11-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://creator-studio-ai-psi.vercel.app/uk/thumbnails</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://creator-studio-ai-psi.vercel.app/thumbnails" />
+    <xhtml:link rel="alternate" hreflang="ru" href="https://creator-studio-ai-psi.vercel.app/ru/thumbnails" />
+    <xhtml:link rel="alternate" hreflang="uk" href="https://creator-studio-ai-psi.vercel.app/uk/thumbnails" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://creator-studio-ai-psi.vercel.app/thumbnails" />
+    <lastmod>2026-11-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://creator-studio-ai-psi.vercel.app/repurpose</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://creator-studio-ai-psi.vercel.app/repurpose" />
+    <xhtml:link rel="alternate" hreflang="ru" href="https://creator-studio-ai-psi.vercel.app/ru/repurpose" />
+    <xhtml:link rel="alternate" hreflang="uk" href="https://creator-studio-ai-psi.vercel.app/uk/repurpose" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://creator-studio-ai-psi.vercel.app/repurpose" />
+    <lastmod>2026-11-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://creator-studio-ai-psi.vercel.app/ru/repurpose</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://creator-studio-ai-psi.vercel.app/repurpose" />
+    <xhtml:link rel="alternate" hreflang="ru" href="https://creator-studio-ai-psi.vercel.app/ru/repurpose" />
+    <xhtml:link rel="alternate" hreflang="uk" href="https://creator-studio-ai-psi.vercel.app/uk/repurpose" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://creator-studio-ai-psi.vercel.app/repurpose" />
+    <lastmod>2026-11-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://creator-studio-ai-psi.vercel.app/uk/repurpose</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://creator-studio-ai-psi.vercel.app/repurpose" />
+    <xhtml:link rel="alternate" hreflang="ru" href="https://creator-studio-ai-psi.vercel.app/ru/repurpose" />
+    <xhtml:link rel="alternate" hreflang="uk" href="https://creator-studio-ai-psi.vercel.app/uk/repurpose" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://creator-studio-ai-psi.vercel.app/repurpose" />
+    <lastmod>2026-11-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
 </urlset>

@@ -28,8 +28,11 @@ jobs:
           echo "key file https://$HOST/$KEY.txt is not reachable"; exit 1
       - name: Ping IndexNow
         run: |
-          payload=$(printf '{"host":"%s","key":"%s","keyLocation":"https://%s/%s.txt","urlList":["https://%s/","https://%s/thumbnails","https://%s/repurpose"]}' \
-            "$HOST" "$KEY" "$HOST" "$KEY" "$HOST" "$HOST" "$HOST")
+          # every <loc> of the live sitemap (all tools x EN/RU/UA)
+          urls=$(curl -fsS "https://$HOST/sitemap.xml" | grep -o '<loc>[^<]*</loc>' | sed -e 's#<loc>##' -e 's#</loc>##' | sed 's/.*/"&"/' | paste -sd, -)
+          [ -n "$urls" ] || urls="\"https://$HOST/\",\"https://$HOST/thumbnails\",\"https://$HOST/repurpose\""
+          payload=$(printf '{"host":"%s","key":"%s","keyLocation":"https://%s/%s.txt","urlList":[%s]}' \
+            "$HOST" "$KEY" "$HOST" "$KEY" "$urls")
           echo "$payload"
           for ep in https://api.indexnow.org/indexnow https://www.bing.com/indexnow https://yandex.com/indexnow; do
             code=$(curl -s -o /tmp/out -w '%{http_code}' -X POST "$ep" \

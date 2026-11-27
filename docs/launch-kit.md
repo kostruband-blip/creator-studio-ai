@@ -4,7 +4,7 @@ Site: https://creator-studio-ai-psi.vercel.app · Sitemap: https://creator-studi
 
 Already automated in this repo:
 
-- `robots.txt` + `sitemap.xml` (3 pages), canonical URLs, Open Graph / Twitter cards (`/og/*.png`, 1200×630),
+- `robots.txt` + `sitemap.xml` (9 URLs: 3 tools × EN/RU/UA with hreflang), canonical URLs, Open Graph / Twitter cards (`/og/*.png`, 1200×630),
   Schema.org `WebApplication` JSON-LD on every page (free, EN/RU/UK).
 - **IndexNow** (Bing, Yandex, Seznam, Naver, Yep): `.github/workflows/indexnow.yml` pings all pages after every
   successful Vercel production deployment. Key file: `/8929cfbb395e30a5a3fa23cccd19a7c0.txt`.
@@ -16,7 +16,7 @@ Needs your account (cannot be done by a bot — logins, captchas, confirmations)
 
 | Where | What to do |
 | --- | --- |
-| Google Search Console — https://search.google.com/search-console | Add property → **URL prefix** → `https://creator-studio-ai-psi.vercel.app/` → method **HTML tag** → send the `content="..."` code to the developer (it is added to all pages) → Verify → Sitemaps → submit `sitemap.xml` → URL inspection → "Request indexing" for `/`, `/thumbnails`, `/repurpose`. |
+| Google Search Console — https://search.google.com/search-console | Add property → **URL prefix** → `https://creator-studio-ai-psi.vercel.app/` → method **HTML tag** → send the `content="..."` code to the developer (it is added to all pages) → Verify → Sitemaps → submit `sitemap.xml` → URL inspection → "Request indexing" for `/`, `/thumbnails`, `/repurpose`, `/ru/`, `/ru/thumbnails`, `/ru/repurpose`, `/uk/`, `/uk/thumbnails`, `/uk/repurpose`. |
 | Bing Webmaster Tools — https://www.bing.com/webmasters | "Import from Google Search Console" (fastest) or HTML meta tag → submit `sitemap.xml`. IndexNow already works without verification. |
 | Yandex Webmaster — https://webmaster.yandex.com | Add site → **Meta tag** → send the code → verify → Indexing → Sitemap files → add `sitemap.xml`. Important for the RU/UA audience. |
 

@@ -270,6 +270,20 @@ python3 -c "import api.analyze as a; print(a.analyze('https://www.youtube.com/@M
 
 ---
 
+## SEO: localized URLs (EN / RU / UA)
+
+Every tool has an indexable URL per language: `/`, `/ru/`, `/uk/`, `/thumbnails`, `/ru/thumbnails`,
+`/uk/thumbnails`, `/repurpose`, `/ru/repurpose`, `/uk/repurpose`. Each one has its own title, description,
+canonical, hreflang alternates, Open Graph, JSON-LD (`WebApplication` + `FAQPage`) and a "How it works + FAQ"
+block in its language. Switching the language in the UI updates the URL without reloading the page.
+
+- Edit only `index.html`, `thumbnails.html`, `repurpose.html` and the texts in `tools/build_i18n_pages.py`.
+- Then run `python3 tools/build_i18n_pages.py` — it rebuilds `ru/*.html`, `uk/*.html` and `sitemap.xml`
+  (never edit those by hand). CI (`.github/workflows/i18n-check.yml`) fails if you forget.
+- After each production deploy `.github/workflows/indexnow.yml` sends every URL from `sitemap.xml` to IndexNow.
+
+---
+
 ## Project structure
 
 ```
@@ -284,7 +298,9 @@ python3 -c "import api.analyze as a; print(a.analyze('https://www.youtube.com/@M
 │   └── repurpose.py    # POST /api/repurpose  (stdlib only)
 ├── favicon.*, apple-touch-icon.png
 ├── preview_server.py   # Local preview with mock APIs (python3 preview_server.py)
-├── vercel.json         # Function config + /thumbnails, /repurpose rewrites + headers
+├── ru/, uk/            # GENERATED localized pages (tools/build_i18n_pages.py)
+├── tools/build_i18n_pages.py  # builds ru/, uk/, sitemap.xml, hreflang + FAQ blocks
+├── vercel.json         # Function config + /thumbnails, /repurpose, /ru/*, /uk/* rewrites + headers
 ├── requirements.txt    # Empty — standard library only
 └── README.md
 ```

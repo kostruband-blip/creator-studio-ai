@@ -1,0 +1,16 @@
+name: Localized pages up to date
+
+# Fails a PR when index.html / thumbnails.html / repurpose.html were edited
+# but the /ru and /uk copies were not rebuilt with tools/build_i18n_pages.py.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check generated pages
+        run: python3 tools/build_i18n_pages.py --check
