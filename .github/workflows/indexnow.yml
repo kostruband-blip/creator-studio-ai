@@ -1,17 +1,18 @@
 name: IndexNow ping (Bing, Yandex, Seznam, Naver, Yep)
 
-# Runs after every successful Vercel production deployment (and manually from the Actions tab).
-# Tells IndexNow search engines that the pages changed so they re-crawl them quickly.
+# Runs after every successful Vercel deployment of main (Vercel reports a commit status "Vercel")
+# and manually from the Actions tab. Tells IndexNow search engines to re-crawl the pages.
 on:
-  deployment_status:
+  status:
   workflow_dispatch:
 
 jobs:
   ping:
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event.deployment_status.state == 'success' &&
-       contains(github.event.deployment.environment, 'Production'))
+      (github.event.state == 'success' &&
+       startsWith(github.event.context, 'Vercel') &&
+       contains(toJSON(github.event.branches.*.name), '"main"'))
     runs-on: ubuntu-latest
     env:
       HOST: creator-studio-ai-psi.vercel.app
@@ -34,4 +35,8 @@ jobs:
             code=$(curl -s -o /tmp/out -w '%{http_code}' -X POST "$ep" \
               -H 'Content-Type: application/json; charset=utf-8' -d "$payload")
             echo "$ep -> HTTP $code $(head -c 200 /tmp/out)"
+            if [ "$ep" = "https://api.indexnow.org/indexnow" ] && [ "$code" != "200" ] && [ "$code" != "202" ]; then
+              failed=1
+            fi
           done
+          [ -z "$failed" ] || { echo "IndexNow rejected the request"; exit 1; }
