@@ -1,0 +1,37 @@
+name: IndexNow ping (Bing, Yandex, Seznam, Naver, Yep)
+
+# Runs after every successful Vercel production deployment (and manually from the Actions tab).
+# Tells IndexNow search engines that the pages changed so they re-crawl them quickly.
+on:
+  deployment_status:
+  workflow_dispatch:
+
+jobs:
+  ping:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.deployment_status.state == 'success' &&
+       contains(github.event.deployment.environment, 'Production'))
+    runs-on: ubuntu-latest
+    env:
+      HOST: creator-studio-ai-psi.vercel.app
+      KEY: 8929cfbb395e30a5a3fa23cccd19a7c0
+    steps:
+      - name: Check that the key file is live
+        run: |
+          for i in 1 2 3 4 5 6; do
+            body=$(curl -fsS "https://$HOST/$KEY.txt" || true)
+            [ "$body" = "$KEY" ] && echo "key file OK" && exit 0
+            echo "key file not live yet, waiting..."; sleep 20
+          done
+          echo "key file https://$HOST/$KEY.txt is not reachable"; exit 1
+      - name: Ping IndexNow
+        run: |
+          payload=$(printf '{"host":"%s","key":"%s","keyLocation":"https://%s/%s.txt","urlList":["https://%s/","https://%s/thumbnails","https://%s/repurpose"]}' \
+            "$HOST" "$KEY" "$HOST" "$KEY" "$HOST" "$HOST" "$HOST")
+          echo "$payload"
+          for ep in https://api.indexnow.org/indexnow https://www.bing.com/indexnow https://yandex.com/indexnow; do
+            code=$(curl -s -o /tmp/out -w '%{http_code}' -X POST "$ep" \
+              -H 'Content-Type: application/json; charset=utf-8' -d "$payload")
+            echo "$ep -> HTTP $code $(head -c 200 /tmp/out)"
+          done
