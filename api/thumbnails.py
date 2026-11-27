@@ -64,11 +64,14 @@ REQUEST_BUDGET = 54   # whole request; vercel.json maxDuration for this function
 GEMINI_BUDGET = 45    # seconds for the Gemini carousel
 YT_KEY = (os.environ.get("YOUTUBE_API_KEY") or "").strip()
 HF_TOKEN = (os.environ.get("HF_TOKEN") or "").strip()
-HF_URL = "https://router.huggingface.co/hf-inference/models/"
+HF_ROUTER = "https://router.huggingface.co/"
+HF_HUB_API = "https://huggingface.co/api/models/"
 HF_MODELS = [m.strip() for m in (os.environ.get("HF_MODEL") or "").split(",") if m.strip()] + [
     "black-forest-labs/FLUX.1-schnell",
-    "stabilityai/stable-diffusion-xl-base-1.0",
+    "black-forest-labs/FLUX.1-dev",
 ]
+# image providers we know how to call through the HF router, in order of preference
+HF_PROVIDERS = ["hf-inference", "together", "nscale", "fal-ai", "replicate"]
 HF_BUDGET = 52        # seconds for one background (function maxDuration 60)
 BG_W, BG_H = 1280, 720
 SHORT_PROMPT_WORDS = 12
@@ -676,48 +679,142 @@ def _hf_error(e):
     return re.sub(r"\s+", " ", str(msg or ""))[:160]
 
 
+_HF_MAPPING = {}
+
+
+def _hf_request(url, payload=None, timeout=30, extra=None, raw=False):
+    h = {"Authorization": "Bearer " + HF_TOKEN, "User-Agent": "CreatorStudioAI/1.0"}
+    if payload is not None:
+        h["Content-Type"] = "application/json"
+    h.update(extra or {})
+    req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8") if payload is not None else None,
+                                 headers=h)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        ctype = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        data = resp.read()
+    if raw:
+        return ctype, data
+    return json.loads(data.decode("utf-8", "replace"))
+
+
+def hf_providers(model, timeout=8):
+    """Live text-to-image providers of `model` on the HF router: [(provider, provider_model_id)]."""
+    if model in _HF_MAPPING:
+        return _HF_MAPPING[model]
+    info = _hf_request(HF_HUB_API + model + "?expand=inferenceProviderMapping", timeout=timeout)
+    mapping = info.get("inferenceProviderMapping") if isinstance(info, dict) else None
+    items = []
+    if isinstance(mapping, dict):
+        items = [dict(v, provider=k) for k, v in mapping.items() if isinstance(v, dict)]
+    elif isinstance(mapping, list):
+        items = [v for v in mapping if isinstance(v, dict)]
+    live = {}
+    for v in items:
+        if v.get("status", "live") == "live" and v.get("task", "text-to-image") == "text-to-image" \
+                and v.get("provider") in HF_PROVIDERS and v.get("providerId"):
+            live[v["provider"]] = v["providerId"]
+    out = [(p, live[p]) for p in HF_PROVIDERS if p in live]
+    _HF_MAPPING[model] = out
+    return out
+
+
+def _download(url, timeout):
+    req = urllib.request.Request(url, headers={"User-Agent": "CreatorStudioAI/1.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return (resp.headers.get("Content-Type") or "image/jpeg").split(";")[0].strip().lower(), resp.read()
+
+
+def hf_generate(provider, pid, model, prompt, seed, size, timeout):
+    """One call through the HF router -> (content_type, bytes). Raises on any error."""
+    w, h = size
+    fast = "schnell" in model.lower()
+    if provider == "hf-inference":
+        params = {"width": w, "height": h, "seed": seed}
+        if fast:
+            params["num_inference_steps"] = 4
+        return _hf_request(HF_ROUTER + "hf-inference/models/" + pid, {"inputs": prompt, "parameters": params},
+                           timeout, {"Accept": "image/jpeg"}, raw=True)
+    if provider == "together":
+        payload = {"prompt": prompt, "response_format": "base64", "model": pid, "width": w, "height": h, "seed": seed}
+        if fast:
+            payload["steps"] = 4
+        d = _hf_request(HF_ROUTER + "together/v1/images/generations", payload, timeout)
+        return "image/jpeg", base64.b64decode(d["data"][0]["b64_json"])
+    if provider == "nscale":
+        d = _hf_request(HF_ROUTER + "nscale/v1/images/generations",
+                        {"response_format": "b64_json", "prompt": prompt, "model": pid, "size": "%dx%d" % (w, h)}, timeout)
+        return "image/png", base64.b64decode(d["data"][0]["b64_json"])
+    if provider == "fal-ai":
+        payload = {"prompt": prompt, "image_size": {"width": w, "height": h}, "seed": seed}
+        if fast:
+            payload["num_inference_steps"] = 4
+        d = _hf_request(HF_ROUTER + "fal-ai/" + pid, payload, timeout)
+        return _download(d["images"][0]["url"], timeout)
+    if provider == "replicate":
+        route = "replicate/v1/predictions" if ":" in pid else "replicate/v1/models/%s/predictions" % pid
+        payload = {"input": {"prompt": prompt, "width": w, "height": h, "seed": seed, "aspect_ratio": "16:9"}}
+        if ":" in pid:
+            payload["version"] = pid.split(":", 1)[1]
+        d = _hf_request(HF_ROUTER + route, payload, timeout, {"Prefer": "wait"})
+        outp = d.get("output")
+        if not outp:
+            raise RuntimeError("replicate: no output yet (%s)" % d.get("status"))
+        return _download(outp if isinstance(outp, str) else outp[0], timeout)
+    raise RuntimeError("unsupported provider " + provider)
+
+
 def hf_background(prompt, seed, size=(BG_W, BG_H)):
-    """-> {"success": True, "image": data-URL, "model"} or {"success": False, "error", "code"}."""
+    """-> {"success": True, "image": data-URL, "model", "provider"} or {"success": False, "error", "code", "tried"}."""
     if not HF_TOKEN:
         return {"success": False, "code": 0, "error": "HF_TOKEN is not set", "setup": HF_HELP}
     prompt = _clean(prompt, 600) or "dramatic cinematic studio scene, no text"
+    seed = int(seed) % 2147483647
     deadline = time.time() + HF_BUDGET
-    last = {"success": False, "code": 503, "error": "no model answered"}
+    tried, last_code = [], 503
     for model in HF_MODELS:
-        left = deadline - time.time()
-        if left < 6:
+        if deadline - time.time() < 6:
             break
-        params = {"width": size[0], "height": size[1], "seed": int(seed) % 2147483647,
-                  "negative_prompt": "text, letters, words, logo, watermark, caption, blurry"}
-        if "schnell" in model.lower():
-            params["num_inference_steps"] = 4
-            params.pop("negative_prompt")
-        body = json.dumps({"inputs": prompt, "parameters": params}).encode("utf-8")
-        req = urllib.request.Request(HF_URL + model, data=body, headers={
-            "Authorization": "Bearer " + HF_TOKEN, "Content-Type": "application/json",
-            "Accept": "image/jpeg", "User-Agent": "CreatorStudioAI/1.0"})
         try:
-            with urllib.request.urlopen(req, timeout=left) as resp:
-                ctype = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
-                data = resp.read()
-            if not ctype.startswith("image/") or len(data) < 2000:
-                last = {"success": False, "code": 502, "error": "%s: not an image (%s)" % (model, ctype)}
-                continue
-            return {"success": True, "model": model,
-                    "image": "data:%s;base64,%s" % (ctype, base64.b64encode(data).decode("ascii"))}
+            providers = hf_providers(model)
         except urllib.error.HTTPError as e:
-            last = {"success": False, "code": e.code, "error": "%s: HTTP %d %s" % (model, e.code, _hf_error(e))}
             if e.code in (401, 403):
-                last["error"] = "HF_TOKEN was rejected by Hugging Face (HTTP %d)" % e.code
-                last["setup"] = HF_HELP
-                return last   # the same token fails for every model
-            if e.code == 402:
-                last["error"] = "Hugging Face free monthly credits are used up (HTTP 402)"
-                return last
-            # 400/404 (model not served) / 410 / 429 / 503 (loading) -> next model
-        except Exception as e:  # timeout / network
-            last = {"success": False, "code": 504, "error": "%s: %s %s" % (model, type(e).__name__, str(e)[:80])}
-    return last
+                return {"success": False, "code": e.code, "setup": HF_HELP, "tried": tried,
+                        "error": "HF_TOKEN was rejected by Hugging Face (HTTP %d)" % e.code}
+            tried.append("%s: mapping HTTP %d" % (model, e.code))
+            continue
+        except Exception as e:
+            tried.append("%s: mapping %s" % (model, type(e).__name__))
+            continue
+        if not providers:
+            tried.append("%s: no live image provider" % model)
+            continue
+        for provider, pid in providers:
+            left = deadline - time.time()
+            if left < 6:
+                break
+            try:
+                ctype, data = hf_generate(provider, pid, model, prompt, seed, size, min(left, 45))
+                if len(data) < 2000:
+                    raise RuntimeError("empty image")
+                if not ctype.startswith("image/"):
+                    ctype = "image/jpeg"
+                return {"success": True, "model": model, "provider": provider, "tried": tried,
+                        "image": "data:%s;base64,%s" % (ctype, base64.b64encode(data).decode("ascii"))}
+            except urllib.error.HTTPError as e:
+                last_code = e.code
+                msg = _hf_error(e)
+                tried.append("%s@%s: HTTP %d %s" % (model, provider, e.code, msg[:90]))
+                if e.code in (401, 403) and "provider" not in msg.lower():
+                    return {"success": False, "code": e.code, "setup": HF_HELP, "tried": tried,
+                            "error": "HF_TOKEN was rejected by Hugging Face (HTTP %d): %s" % (e.code, msg[:120])}
+                if e.code == 402:
+                    return {"success": False, "code": 402, "tried": tried,
+                            "error": "Hugging Face free monthly credits are used up (HTTP 402)"}
+            except Exception as e:  # timeout / network / unexpected JSON
+                last_code = 504
+                tried.append("%s@%s: %s %s" % (model, provider, type(e).__name__, str(e)[:80]))
+    return {"success": False, "code": last_code, "tried": tried,
+            "error": tried[-1] if tried else "no model answered"}
 
 
 def parse_lang(value):
@@ -761,7 +858,8 @@ class handler(BaseHTTPRequestHandler):  # noqa: N801 - required name for Vercel
             t0 = time.time()
             r = hf_background("red sports car in a neon garage, cinematic", 7, size=(512, 288))
             out = {"status": "ok", "hf_token": bool(HF_TOKEN), "success": r.get("success"),
-                   "model": r.get("model"), "error": r.get("error"), "code": r.get("code"),
+                   "model": r.get("model"), "provider": r.get("provider"), "tried": r.get("tried"),
+                   "error": r.get("error"), "code": r.get("code"),
                    "image_bytes": len(r.get("image") or "") * 3 // 4, "elapsed": round(time.time() - t0, 1)}
             _send_json(self, out)
             return
