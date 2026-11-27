@@ -472,7 +472,7 @@
       bgLoading: "Drawing the AI background…",
       bgOk: "AI background ready.",
       bgFail: "AI image service did not answer, a studio background is used. Try “New background”.",
-      bgHf: "Drawing the AI background (Hugging Face)…",
+      bgHf: "Drawing the AI background (FLUX)…",
       hlHint: "Tip: wrap a word in *asterisks* to paint it in the accent colour.",
       badgeLabel: "Sticker text",
       bgQueued: "Waiting in line for the AI background…",
@@ -529,7 +529,7 @@
       bgLoading: "Рисуем ИИ-фон…",
       bgOk: "ИИ-фон готов.",
       bgFail: "Сервис ИИ-картинок не ответил, используется студийный фон. Нажмите «Новый фон».",
-      bgHf: "Рисуем ИИ-фон (Hugging Face)…",
+      bgHf: "Рисуем ИИ-фон (FLUX)…",
       hlHint: "Совет: возьмите слово в *звёздочки*, чтобы выделить его цветом.",
       badgeLabel: "Текст стикера",
       bgQueued: "Ждём очереди на ИИ-фон…",
@@ -586,7 +586,7 @@
       bgLoading: "Малюємо ШІ-фон…",
       bgOk: "ШІ-фон готовий.",
       bgFail: "Сервіс ШІ-зображень не відповів, використано студійний фон. Натисніть «Новий фон».",
-      bgHf: "Малюємо ШІ-фон (Hugging Face)…",
+      bgHf: "Малюємо ШІ-фон (FLUX)…",
       hlHint: "Порада: візьміть слово в *зірочки*, щоб виділити його кольором.",
       badgeLabel: "Текст стікера",
       bgQueued: "Чекаємо черги на ШІ-фон…",
@@ -837,7 +837,8 @@
   var BG_W = 1280, BG_H = 720, BG_ZOOM = 1.08;
   var hfOff = false;   // token rejected / credits used up -> stop asking Hugging Face this session
 
-  function useHf() { return !!(state.data && state.data.hf) && !hfOff; }
+  // the server draws backgrounds itself when Cloudflare Workers AI and/or Hugging Face is configured
+  function useHf() { return !!(state.data && (state.data.bg_api || state.data.hf)) && !hfOff; }
 
   function requestBackground(i) {
     if (useHf()) hfBackground(i); else queueBackground(i);
@@ -865,7 +866,7 @@
       .then(function (img) {
         clearTimeout(timer);
         if (run !== state.run) return;
-        if (isStub(img)) throw new Error("empty picture");
+        if (isStub(img, false)) throw new Error("empty picture");   // square FLUX.1 pictures are fine (cover crop)
         img.zoom = 1;
         bgReady(i, img);
       })
@@ -873,15 +874,16 @@
         clearTimeout(timer);
         if (run !== state.run) return;
         if (e && (e.code === 0 || e.code === 401 || e.code === 403 || e.code === 402)) hfOff = true;
-        if (window.console) console.warn("Hugging Face background failed, using Pollinations:", e && e.message);
+        if (window.console) console.warn("Server AI background failed, using Pollinations:", e && e.message);
         queueBackground(i);   // free Pollinations queue as the backup
       });
   }
 
   // "Free limit reached" card / empty picture: wrong size, mostly yellow or almost flat
-  function isStub(img) {
+  function isStub(img, strictRatio) {
     var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
-    if (!w || !h || w < 400 || Math.abs(w / h - BG_W / BG_H) > 0.05) return true;
+    if (!w || !h || w < 256) return true;
+    if (strictRatio !== false && Math.abs(w / h - BG_W / BG_H) > 0.05) return true;
     try {
       var c = document.createElement("canvas"); c.width = 32; c.height = 18;
       var x = c.getContext("2d"); x.drawImage(img, 0, 0, 32, 18);
