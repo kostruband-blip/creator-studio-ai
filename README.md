@@ -93,6 +93,7 @@ the Telegram bot [@remtex_shorts_ai_bot](https://t.me/remtex_shorts_ai_bot).
 | `GEMINI_MODELS`      | optional | Comma-separated model list; skips asking Gemini for available models. |
 | `SUBS_PROXY_URL`     | optional | Content Repurposer: backup subtitle server, called as `GET {SUBS_PROXY_URL}?v={video_id}` when YouTube refuses the direct request. |
 | `SUBS_PROXY_TOKEN`   | optional | Sent to the backup subtitle server as the `X-Token` header.        |
+| `SUBS_PROXY_TIMEOUT` | optional | Seconds to wait for the backup subtitle server (default 50, 10–70). |
 | `HF_TOKEN`           | optional | Thumbnail Lab: free Hugging Face token (`hf_…`, huggingface.co → Settings → Access Tokens). When set, AI backgrounds 1280×720 are drawn by Hugging Face (FLUX.1-schnell, SDXL as backup) instead of the free Pollinations queue. |
 | `HF_MODEL`           | optional | Comma-separated Hugging Face model ids tried before the defaults.  |
 
@@ -168,7 +169,7 @@ Missing `GEMINI_API_KEY` → `{"success": false, "error": "...", "setup": {"titl
    **subtitles** (InnerTube player → watch page caption tracks). YouTube often blocks
    subtitles for datacenter IPs (`LOGIN_REQUIRED`). Then, if `SUBS_PROXY_URL` is set, the
    backup subtitle server is asked: `GET {SUBS_PROXY_URL}?v={video_id}` with header
-   `X-Token: {SUBS_PROXY_TOKEN}` (timeout 25 s); a non-empty JSON `text` is used as the full
+   `X-Token: {SUBS_PROXY_TOKEN}` (timeout `SUBS_PROXY_TIMEOUT`, 50 s by default); a non-empty JSON `text` is used as the full
    transcript (`sources.subtitles` = `manual`/`auto`, `sources.subtitles_via` = `"proxy"`).
    If there is still no transcript, **Gemini watches the public video
    itself**: the YouTube URL is sent as `fileData` (low media resolution, 0.2 fps, first
