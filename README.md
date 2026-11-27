@@ -199,6 +199,15 @@ conclusion_h2, conclusion, markdown, html}, "social_posts": [5 × {angle, text}]
 `GET /api/repurpose?probe=<youtube url>` is a diagnostic (metadata + subtitle availability, no Gemini call).
 Missing `GEMINI_API_KEY` → JSON error with setup steps (never a 500).
 
+
+### Backup subtitle server (`tools/subs_server.py`)
+
+YouTube refuses subtitle requests from Vercel IPs. Run `tools/subs_server.py` on your own VPS
+(stdlib + `yt-dlp`): `GET /subs?v=VIDEO_ID` with `X-Token` → `{"ok", "video_id", "text", "lang", "source"}`.
+It reads only the subtitle track (`skip_download`, `process=False`), so "Requested format is not
+available" never breaks it. Then set `SUBS_PROXY_URL=http://<ip>:8090/subs` and `SUBS_PROXY_TOKEN` in
+Vercel. Check from Vercel: `/api/repurpose?proxycheck=1&v=VIDEO_ID`.
+
 ---
 
 ## API
