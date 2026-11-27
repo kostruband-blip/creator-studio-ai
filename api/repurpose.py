@@ -344,7 +344,7 @@ def fetch_transcript_proxy(video_id, base=None):
     return {
         "text": text[:TRANSCRIPT_LIMIT],
         "language": iso_to_lang(str(data.get("lang") or data.get("language") or "")),
-        "auto": bool(data.get("auto")) or data.get("kind") == "asr",
+        "auto": bool(data.get("auto")) or data.get("kind") == "asr" or data.get("source") == "auto",
         "via": "proxy",
         "truncated": len(text) > TRANSCRIPT_LIMIT,
     }
