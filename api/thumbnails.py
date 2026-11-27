@@ -676,7 +676,7 @@ def _hf_error(e):
     return re.sub(r"\s+", " ", str(msg or ""))[:160]
 
 
-def hf_background(prompt, seed):
+def hf_background(prompt, seed, size=(BG_W, BG_H)):
     """-> {"success": True, "image": data-URL, "model"} or {"success": False, "error", "code"}."""
     if not HF_TOKEN:
         return {"success": False, "code": 0, "error": "HF_TOKEN is not set", "setup": HF_HELP}
@@ -687,7 +687,7 @@ def hf_background(prompt, seed):
         left = deadline - time.time()
         if left < 6:
             break
-        params = {"width": BG_W, "height": BG_H, "seed": int(seed) % 2147483647,
+        params = {"width": size[0], "height": size[1], "seed": int(seed) % 2147483647,
                   "negative_prompt": "text, letters, words, logo, watermark, caption, blurry"}
         if "schnell" in model.lower():
             params["num_inference_steps"] = 4
@@ -757,6 +757,14 @@ class handler(BaseHTTPRequestHandler):  # noqa: N801 - required name for Vercel
 
     def do_GET(self):
         query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        if "hfcheck" in query:   # one small test picture (512x288) -> status only, no image
+            t0 = time.time()
+            r = hf_background("red sports car in a neon garage, cinematic", 7, size=(512, 288))
+            out = {"status": "ok", "hf_token": bool(HF_TOKEN), "success": r.get("success"),
+                   "model": r.get("model"), "error": r.get("error"), "code": r.get("code"),
+                   "image_bytes": len(r.get("image") or "") * 3 // 4, "elapsed": round(time.time() - t0, 1)}
+            _send_json(self, out)
+            return
         if "models" in query:
             out = {"status": "ok"}
             out.update(gemini_diagnostics())
