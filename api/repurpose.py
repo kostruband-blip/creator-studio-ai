@@ -13,7 +13,7 @@ POST /api/repurpose   {"url": "https://youtu.be/...", "notes": "...", "lang": "a
      title, description, chapters and the user's `notes`.
    If YouTube refuses and SUBS_PROXY_URL is set, the subtitles are requested from our
    backup server: GET {SUBS_PROXY_URL}?v={video_id} with header X-Token: {SUBS_PROXY_TOKEN}
-   (timeout 25 s); a non-empty JSON "text" is used as the full transcript.
+   (timeout SUBS_PROXY_TIMEOUT, 50 s by default); a non-empty JSON "text" is the full transcript.
    Only `notes` without a link also works.
    When there are no subtitles, Gemini WATCHES the public video itself (YouTube URL as
    fileData, low media resolution, first VIDEO_WATCH_LIMIT seconds) — Google fetches the
@@ -60,7 +60,10 @@ SUBS_PROXY_URL = (os.environ.get("SUBS_PROXY_URL") or "").strip()
 if SUBS_PROXY_URL and "://" not in SUBS_PROXY_URL:
     SUBS_PROXY_URL = "http://" + SUBS_PROXY_URL.lstrip("/")  # "1.2.3.4:8000/subs" -> "http://1.2.3.4:8000/subs"
 SUBS_PROXY_TOKEN = (os.environ.get("SUBS_PROXY_TOKEN") or "").strip()
-SUBS_PROXY_TIMEOUT = 25
+try:  # yt-dlp with cookies + PO token on the VPS needs ~15-25 s per video -> 50 s by default
+    SUBS_PROXY_TIMEOUT = max(10.0, min(70.0, float(os.environ.get("SUBS_PROXY_TIMEOUT") or 50)))
+except ValueError:
+    SUBS_PROXY_TIMEOUT = 50.0
 UA_HEADER = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
              "(KHTML, like Gecko) Chrome/131.0 Safari/537.36")
 
@@ -311,7 +314,9 @@ def fetch_transcript_proxy(video_id, base=None):
         headers["X-Token"] = SUBS_PROXY_TOKEN
     started = time.time()
     try:
-        raw = http_get(url, timeout=SUBS_PROXY_TIMEOUT, headers=headers)
+        # keep enough time for the Gemini text call after the subtitles arrive
+        left = time_left() - GEMINI_BUDGET - 8 if REQUEST["deadline"] else SUBS_PROXY_TIMEOUT
+        raw = http_get(url, timeout=max(10.0, min(SUBS_PROXY_TIMEOUT, left)), headers=headers)
     except urllib.error.HTTPError as e:
         try:
             body = e.read().decode("utf-8", "replace")[:120]
