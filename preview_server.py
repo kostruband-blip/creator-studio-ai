@@ -206,7 +206,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 data = {}
             if data.get("bg"):  # optional Hugging Face background: real call only if HF_TOKEN is set
-                self._send(200, json.dumps(thumbs_api.hf_background(data["bg"], data.get("seed") or 1)))
+                self._send(200, json.dumps(thumbs_api.ai_background(data["bg"], data.get("seed") or 1)))
                 return
             topic = (data.get("topic") or "").strip()
             if len(topic) < 3:
@@ -217,6 +217,7 @@ class Handler(BaseHTTPRequestHandler):
                                               thumbs_api.parse_lang(data.get("lang")))
             out["ai"] = "gemini"  # preview: pretend the templates came from Gemini
             out["hf"] = bool(thumbs_api.HF_TOKEN)
+            out["bg_api"] = thumbs_api.bg_api()
             vid, _rest = thumbs_api.split_topic(topic)
             if vid:  # preview: pretend the YouTube link was resolved
                 out["video"] = {"id": vid, "url": "https://www.youtube.com/watch?v=" + vid,

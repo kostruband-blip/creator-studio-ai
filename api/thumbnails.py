@@ -29,7 +29,8 @@ also carries bg_prompt (<= 12 English words, for the free image service),
 highlight (the accent word of overlay_text) and badge (1-2 word sticker).
 
 POST /api/thumbnails   {"bg": "<image prompt>", "seed": 123}
-  Optional AI background through Hugging Face when HF_TOKEN is set in Vercel
+  Optional AI background: Cloudflare Workers AI (CF_ACCOUNT_ID + CF_API_TOKEN, free daily
+  allocation) first, then Hugging Face when HF_TOKEN is set in Vercel
   (free token: huggingface.co/settings/tokens). Returns
   {"success": true, "image": "data:image/...;base64,...", "model": "..."}
   or {"success": false, "error": "...", "code": 401|402|503|...}. Without HF_TOKEN the
@@ -64,6 +65,12 @@ REQUEST_BUDGET = 54   # whole request; vercel.json maxDuration for this function
 GEMINI_BUDGET = 45    # seconds for the Gemini carousel
 YT_KEY = (os.environ.get("YOUTUBE_API_KEY") or "").strip()
 HF_TOKEN = (os.environ.get("HF_TOKEN") or "").strip()
+CF_ACCOUNT = (os.environ.get("CF_ACCOUNT_ID") or os.environ.get("CLOUDFLARE_ACCOUNT_ID") or "").strip()
+CF_TOKEN = (os.environ.get("CF_API_TOKEN") or os.environ.get("CLOUDFLARE_API_TOKEN") or "").strip()
+CF_URL = "https://api.cloudflare.com/client/v4/accounts/%s/ai/run/"
+# FLUX.2 klein: native 1280x720 (~100 neurons); FLUX.1 schnell: square 1024 (~58 neurons) as backup.
+# Free allocation: 10,000 neurons per day -> roughly 95-170 backgrounds per day.
+CF_MODELS = ["@cf/black-forest-labs/flux-2-klein-4b", "@cf/black-forest-labs/flux-1-schnell"]
 HF_ROUTER = "https://router.huggingface.co/"
 HF_HUB_API = "https://huggingface.co/api/models/"
 HF_MODELS = [m.strip() for m in (os.environ.get("HF_MODEL") or "").split(",") if m.strip()] + [
@@ -597,6 +604,7 @@ def generate(topic, niche, lang):
     out = _generate(topic, niche, lang, video, notes)
     if out.get("success"):
         out["hf"] = bool(HF_TOKEN)
+        out["bg_api"] = bg_api()
     if video and out.get("success"):
         out["video"] = {k: video[k] for k in ("id", "url", "title", "channel", "thumbnail")}
     return out
@@ -763,6 +771,91 @@ def hf_generate(provider, pid, model, prompt, seed, size, timeout):
     raise RuntimeError("unsupported provider " + provider)
 
 
+CF_HELP = {"title": "Free AI backgrounds via Cloudflare Workers AI", "steps": [
+    "Create a free account at dash.cloudflare.com.",
+    "Account ID: Workers & Pages (or AI -> Workers AI) -> right column 'Account ID' -> copy.",
+    "API token: My Profile -> API Tokens -> Create Token -> template 'Workers AI' -> Create -> copy.",
+    "Vercel -> Settings -> Environment Variables: CF_ACCOUNT_ID and CF_API_TOKEN, then Redeploy."]}
+
+
+def _multipart(fields):
+    boundary = "----csai%016x" % random.getrandbits(64)
+    out = []
+    for k, v in fields.items():
+        out.append("--%s\r\nContent-Disposition: form-data; name=\"%s\"\r\n\r\n%s\r\n" % (boundary, k, v))
+    out.append("--%s--\r\n" % boundary)
+    return "".join(out).encode("utf-8"), "multipart/form-data; boundary=" + boundary
+
+
+def _cf_error(e):
+    try:
+        j = json.loads(e.read().decode("utf-8", "replace"))
+        errs = j.get("errors") or []
+        if errs and isinstance(errs[0], dict):
+            return "%s %s" % (errs[0].get("code", ""), errs[0].get("message", ""))
+        return json.dumps(j)[:160]
+    except Exception:
+        return ""
+
+
+def cf_background(prompt, seed, size, deadline, tried):
+    """Cloudflare Workers AI. -> result dict on success, None to try the next service."""
+    for model in CF_MODELS:
+        left = deadline - time.time()
+        if left < 6:
+            break
+        if "flux-2" in model:
+            body, ctype = _multipart({"prompt": prompt[:2000], "width": size[0], "height": size[1], "seed": seed})
+        else:
+            body, ctype = json.dumps({"prompt": prompt[:2000], "steps": 4, "seed": seed}).encode("utf-8"), "application/json"
+        req = urllib.request.Request(CF_URL % CF_ACCOUNT + model, data=body, headers={
+            "Authorization": "Bearer " + CF_TOKEN, "Content-Type": ctype, "User-Agent": "CreatorStudioAI/1.0"})
+        try:
+            with urllib.request.urlopen(req, timeout=min(left, 40)) as resp:
+                rtype = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+                raw = resp.read()
+            if rtype.startswith("image/"):
+                data = raw
+            else:
+                j = json.loads(raw.decode("utf-8", "replace"))
+                img = (j.get("result") or {}).get("image") if isinstance(j, dict) else None
+                if not img:
+                    raise RuntimeError("no image in answer")
+                data = base64.b64decode(img)
+            if len(data) < 2000:
+                raise RuntimeError("empty image")
+            return {"success": True, "provider": "cloudflare", "model": model, "tried": list(tried),
+                    "image": "data:image/jpeg;base64," + base64.b64encode(data).decode("ascii")}
+        except urllib.error.HTTPError as e:
+            msg = _cf_error(e)
+            tried.append("cloudflare %s: HTTP %d %s" % (model.split("/")[-1], e.code, msg[:110]))
+            if e.code in (401, 403):
+                break   # token / account id wrong -> same for every model
+        except Exception as e:
+            tried.append("cloudflare %s: %s %s" % (model.split("/")[-1], type(e).__name__, str(e)[:80]))
+    return None
+
+
+def ai_background(prompt, seed, size=(BG_W, BG_H)):
+    """Cloudflare Workers AI (free daily allocation) -> Hugging Face -> error (browser then uses Pollinations)."""
+    if not (CF_ACCOUNT and CF_TOKEN) and not HF_TOKEN:
+        return {"success": False, "code": 0, "error": "no image service configured (CF_ACCOUNT_ID + CF_API_TOKEN or HF_TOKEN)",
+                "setup": CF_HELP}
+    prompt = _clean(prompt, 600) or "dramatic cinematic studio scene, no text"
+    seed = int(seed) % 2147483647
+    tried = []
+    if CF_ACCOUNT and CF_TOKEN:
+        r = cf_background(prompt, seed, size, time.time() + (30 if HF_TOKEN else HF_BUDGET), tried)
+        if r:
+            return r
+    if HF_TOKEN:
+        r = hf_background(prompt, seed, size)
+        r["tried"] = tried + (r.get("tried") or [])
+        return r
+    return {"success": False, "code": 503, "tried": tried, "error": tried[-1] if tried else "no answer",
+            "setup": CF_HELP if any("HTTP 401" in x or "HTTP 403" in x for x in tried) else None}
+
+
 def hf_background(prompt, seed, size=(BG_W, BG_H)):
     """-> {"success": True, "image": data-URL, "model", "provider"} or {"success": False, "error", "code", "tried"}."""
     if not HF_TOKEN:
@@ -817,6 +910,11 @@ def hf_background(prompt, seed, size=(BG_W, BG_H)):
             "error": tried[-1] if tried else "no model answered"}
 
 
+def bg_api():
+    """True when the server can draw backgrounds itself (Cloudflare and/or Hugging Face)."""
+    return bool((CF_ACCOUNT and CF_TOKEN) or HF_TOKEN)
+
+
 def parse_lang(value):
     v = str(value or "en").strip().lower()
     if v in ("uk", "ua", "uk-ua"):
@@ -854,10 +952,11 @@ class handler(BaseHTTPRequestHandler):  # noqa: N801 - required name for Vercel
 
     def do_GET(self):
         query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-        if "hfcheck" in query:   # one small test picture (512x288) -> status only, no image
+        if "hfcheck" in query or "bgcheck" in query:   # one small test picture -> status only, no image
             t0 = time.time()
-            r = hf_background("red sports car in a neon garage, cinematic", 7, size=(512, 288))
-            out = {"status": "ok", "hf_token": bool(HF_TOKEN), "success": r.get("success"),
+            r = ai_background("red sports car in a neon garage, cinematic", 7, size=(512, 288))
+            out = {"status": "ok", "cloudflare": bool(CF_ACCOUNT and CF_TOKEN), "hf_token": bool(HF_TOKEN),
+                   "success": r.get("success"),
                    "model": r.get("model"), "provider": r.get("provider"), "tried": r.get("tried"),
                    "error": r.get("error"), "code": r.get("code"),
                    "image_bytes": len(r.get("image") or "") * 3 // 4, "elapsed": round(time.time() - t0, 1)}
@@ -868,7 +967,8 @@ class handler(BaseHTTPRequestHandler):  # noqa: N801 - required name for Vercel
             out.update(gemini_diagnostics())
             _send_json(self, out)
             return
-        _send_json(self, {"status": "ok", "service": "Thumbnail & Title Lab", "hf": bool(HF_TOKEN)})
+        _send_json(self, {"status": "ok", "service": "Thumbnail & Title Lab", "hf": bool(HF_TOKEN),
+                          "cloudflare": bool(CF_ACCOUNT and CF_TOKEN), "bg_api": bg_api()})
 
     def do_POST(self):
         try:
@@ -885,7 +985,7 @@ class handler(BaseHTTPRequestHandler):  # noqa: N801 - required name for Vercel
                     seed = int(data.get("seed") or random.randint(1, 10 ** 9))
                 except (TypeError, ValueError):
                     seed = random.randint(1, 10 ** 9)
-                _send_json(self, hf_background(data.get("bg"), seed))
+                _send_json(self, ai_background(data.get("bg"), seed))
                 return
             topic = _clean(data.get("topic"), 200)
             niche = _clean(data.get("niche"), 120)
