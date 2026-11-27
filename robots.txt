@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: https://creator-studio-ai-psi.vercel.app/sitemap.xml
