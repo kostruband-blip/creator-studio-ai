@@ -94,7 +94,7 @@ the Telegram bot [@remtex_shorts_ai_bot](https://t.me/remtex_shorts_ai_bot).
 | `SUBS_PROXY_URL`     | optional | Content Repurposer: backup subtitle server, called as `GET {SUBS_PROXY_URL}?v={video_id}` when YouTube refuses the direct request. |
 | `SUBS_PROXY_TOKEN`   | optional | Sent to the backup subtitle server as the `X-Token` header.        |
 | `SUBS_PROXY_TIMEOUT` | optional | Seconds to wait for the backup subtitle server (default 50, 10–70). |
-| `HF_TOKEN`           | optional | Thumbnail Lab: free Hugging Face token (`hf_…`, huggingface.co → Settings → Access Tokens). When set, AI backgrounds 1280×720 are drawn by Hugging Face (FLUX.1-schnell, SDXL as backup) instead of the free Pollinations queue. |
+| `HF_TOKEN`           | optional | Thumbnail Lab: free Hugging Face token (`hf_…`, huggingface.co → Settings → Access Tokens). When set, AI backgrounds 1280×720 are drawn through Hugging Face Inference Providers (FLUX.1-schnell, then FLUX.1-dev; the live provider — hf-inference / Together / Nscale / fal / Replicate — is looked up on the Hub) instead of the free Pollinations queue. Check: `/api/thumbnails?hfcheck=1`. |
 | `HF_MODEL`           | optional | Comma-separated Hugging Face model ids tried before the defaults.  |
 
 > **Gemini 429 (quota exceeded)?** Free limits are counted **per Google Cloud project and per model** (daily limits reset at midnight Pacific). Extra keys only help if they come from **different projects**. Check your live limits at https://aistudio.google.com/rate-limit or enable billing for higher limits.
@@ -138,7 +138,7 @@ That's it — visit the deployed site, paste a YouTube link, and analyze.
    or any word the user wraps in `*asterisks*`). An uploaded photo sits in the right third with a soft
    fade at the bottom, a light outline and an accent glow. Text and sticker are editable per card.
 4. Backgrounds: if `HF_TOKEN` is set, the browser asks `POST /api/thumbnails {"bg": prompt, "seed": n}`
-   and gets a ready data-URL from Hugging Face (`router.huggingface.co/hf-inference`, 3 in parallel).
+   and gets a ready data-URL from Hugging Face (`router.huggingface.co/<provider>`, 3 in parallel).
    Otherwise (or if HF fails) the free `https://image.pollinations.ai/prompt/...` endpoint is used with
    a short prompt (`bg_prompt`, ≤ 12 words), one picture per ≥ 47 s with a countdown, the image is
    zoomed 1.08× from the top (the bottom strip with the free-tier mark is cut off), and "Free limit
